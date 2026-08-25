@@ -436,6 +436,12 @@ function isNoiseLine(line) {
         return true;
     if (/^#\S+(\s*#\S+)*$/.test(line.trim()))
         return true; // hashtag-only line
+    // Reader-proxy / login-wall boilerplate that shows up when a site (e.g.
+    // Instagram) blocks unauthenticated scraping — these are page furniture,
+    // not recipe content. Matched after collapseIntraLineSpaces has already
+    // stripped internal spaces, so e.g. "URL Source:" becomes "URLSource:".
+    if (/^(URLSource:|MarkdownContent:|Title:|LogIn|SignUp|Nevermind)$/i.test(line.trim()))
+        return true;
     return false;
 }
 // Recipe-site step numbers are small circled-digit icons (①②③) that OCR
@@ -680,7 +686,22 @@ function parseCaptionHeuristic(rawText) {
         seenIngredients.add(key);
         return true;
     });
-    const dedupedSteps = steps.filter((s, i) => s !== steps[i - 1]);
+    const dedupedSteps0 = steps.filter((s, i) => s !== steps[i - 1]);
+    // Some source pages (Instagram reels especially) include the full
+    // caption twice in the fetched markdown — e.g. an og:description meta
+    // block followed by the same text again in the visible page body. That
+    // produces steps [1,2,3,1,2,3] rather than adjacent duplicates, which
+    // the filter above doesn't catch. Detect a whole-list repeat (the
+    // second half exactly matching the first) and drop the repeat.
+    let dedupedSteps = dedupedSteps0;
+    if (dedupedSteps0.length >= 2 && dedupedSteps0.length % 2 === 0) {
+        const half = dedupedSteps0.length / 2;
+        const firstHalf = dedupedSteps0.slice(0, half);
+        const secondHalf = dedupedSteps0.slice(half);
+        if (firstHalf.every((s, i) => s === secondHalf[i])) {
+            dedupedSteps = firstHalf;
+        }
+    }
     const memoLines = lines
         .filter((l) => l.startsWith("★") || l.startsWith("※"))
         .map((l) => l.replace(/^[★※]\s*/, ""));
