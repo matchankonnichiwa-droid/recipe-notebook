@@ -112,7 +112,7 @@ function splitNameGroup(name) {
     // latter has no "name" to speak of, but the person still wants those
     // ingredients visually clustered together rather than shown flat.
     const isBareMarker = /^[A-Za-zＡ-Ｚａ-ｚ]{1,2}$|^[①-⑳]$|^\d{1,2}$/.test(label);
-    if (KNOWN_GROUP_HEADERS.includes(label) || isBareMarker) {
+    if (matchesKnownGroup(label) || isBareMarker) {
         return { base: m[1].trim(), group: label };
     }
     return { base: name || "", group: null };
@@ -211,20 +211,48 @@ const MEAT_ICONS = { 鶏肉: "🐔", 豚肉: "🐖", 牛肉: "🐄", その他: 
 const MEAT_TYPES = ["鶏肉", "豚肉", "牛肉", "ひき肉", "その他"];
 const NOODLE_TYPES = ["うどん", "そば", "ラーメン", "パスタ", "その他"];
 const VEG_TYPES = ["サラダ", "炒め物", "和え物・おひたし", "煮物", "漬け物", "その他"];
+function inferNoodleType(title) {
+    const t = title || "";
+    if (/うどん/.test(t))
+        return "うどん";
+    if (/ラーメン/.test(t))
+        return "ラーメン";
+    if (/そば/.test(t))
+        return "そば";
+    if (/パスタ|スパゲ/.test(t))
+        return "パスタ";
+    return "その他";
+}
+function inferMeatType(names) {
+    if (/鶏肉|鶏|鳥/.test(names))
+        return "鶏肉";
+    if (/豚肉|豚/.test(names))
+        return "豚肉";
+    if (/牛肉|牛/.test(names))
+        return "牛肉";
+    if (/ひき肉|挽き肉|合いびき/.test(names))
+        return "ひき肉";
+    return "その他";
+}
+function inferVegType(title) {
+    const t = title || "";
+    if (/サラダ/.test(t))
+        return "サラダ";
+    if (/炒め/.test(t))
+        return "炒め物";
+    if (/和え|おひたし/.test(t))
+        return "和え物・おひたし";
+    if (/煮/.test(t))
+        return "煮物";
+    if (/漬け/.test(t))
+        return "漬け物";
+    return "その他";
+}
 function inferDishCategory(title, ingredients) {
     const t = title || "";
     const base = { meatType: null, noodleType: null, vegType: null };
     if (/麺|パスタ|うどん|そば|ラーメン|焼きそば/.test(t)) {
-        let noodleType = "その他";
-        if (/うどん/.test(t))
-            noodleType = "うどん";
-        else if (/ラーメン/.test(t))
-            noodleType = "ラーメン";
-        else if (/そば/.test(t))
-            noodleType = "そば";
-        else if (/パスタ|スパゲ/.test(t))
-            noodleType = "パスタ";
-        return { ...base, dishCategory: "麺類", noodleType };
+        return { ...base, dishCategory: "麺類", noodleType: inferNoodleType(t) };
     }
     if (/パン|食パン|ベーグル|フォカッチャ|バゲット|ロール(?!キャベツ)/.test(t))
         return { ...base, dishCategory: "パン" };
@@ -249,18 +277,7 @@ function inferDishCategory(title, ingredients) {
     if (/魚|えび|海老|いか|イカ|たこ|タコ|貝|鮭|さけ|まぐろ|ツナ|しらす/.test(names))
         return { ...base, dishCategory: "魚介料理" };
     if (vegKeywords.test(names)) {
-        let vegType = "その他";
-        if (/サラダ/.test(t))
-            vegType = "サラダ";
-        else if (/炒め/.test(t))
-            vegType = "炒め物";
-        else if (/和え|おひたし/.test(t))
-            vegType = "和え物・おひたし";
-        else if (/煮/.test(t))
-            vegType = "煮物";
-        else if (/漬け/.test(t))
-            vegType = "漬け物";
-        return { ...base, dishCategory: "野菜料理", vegType };
+        return { ...base, dishCategory: "野菜料理", vegType: inferVegType(t) };
     }
     return { ...base, dishCategory: "その他" };
 }
@@ -296,20 +313,46 @@ function inferAppliance(text) {
 // Prefers Claude's own classification (it understands the whole recipe, not
 // just keyword matches) but falls back to the local heuristic if Claude
 // wasn't used or returned something outside our known categories.
-function resolveClassification(structured, classifyText, ingredients, applianceText, usedClaude) {
+// Important: the sub-type fallbacks (meatType/noodleType/vegType) are
+// derived directly from the title/ingredients rather than gated on
+// heuristic.dishCategory matching the *final* dishCategory. Those can
+// legitimately disagree — e.g. a vegetable salad with canned tuna in it:
+// the keyword heuristic used for dishCategory prioritizes "seafood" the
+// moment it sees ツナ, so heuristic.dishCategory comes out 魚介料理 even
+// though the real dish (and Claude's own dishCategory judgment) is 野菜
+//料理. Gating the vegType fallback on that mismatched heuristic category
+// silently dropped it to "その他" instead of detecting "サラダ" from the
+// title, which is exactly the bug this direct derivation avoids.
+//
+// titleOnly also gets priority *over* Claude's own sub-type guess (not just
+// as a fallback when Claude's field is missing/invalid): Claude sometimes
+// returns a technically-valid-but-wrong value like vegType "その他" for a
+// dish whose title literally says "〜サラダ" — an explicit word in the
+// title is a stronger, more legible signal than the model's own category
+// judgment, so it should win rather than only being consulted when
+// Claude's field fails validation.
+function resolveClassification(structured, classifyText, ingredients, applianceText, usedClaude, titleOnly) {
     const heuristic = inferDishCategory(classifyText, ingredients);
     const dishCategory = usedClaude && DISH_CATEGORIES.includes(structured?.dishCategory) ? structured.dishCategory : heuristic.dishCategory;
+    const names = (ingredients || []).map((i) => i.name || "").join(" ");
+    const title = titleOnly || "";
     let meatType = null;
     if (dishCategory === "肉料理") {
-        meatType = usedClaude && MEAT_TYPES.includes(structured?.meatType) ? structured.meatType : (heuristic.dishCategory === "肉料理" ? heuristic.meatType : "その他");
+        const titleMeat = inferMeatType(names);
+        meatType = titleMeat !== "その他" ? titleMeat
+            : (usedClaude && MEAT_TYPES.includes(structured?.meatType) ? structured.meatType : titleMeat);
     }
     let noodleType = null;
     if (dishCategory === "麺類") {
-        noodleType = usedClaude && NOODLE_TYPES.includes(structured?.noodleType) ? structured.noodleType : (heuristic.dishCategory === "麺類" ? heuristic.noodleType : "その他");
+        const titleNoodle = inferNoodleType(title);
+        noodleType = titleNoodle !== "その他" ? titleNoodle
+            : (usedClaude && NOODLE_TYPES.includes(structured?.noodleType) ? structured.noodleType : titleNoodle);
     }
     let vegType = null;
     if (dishCategory === "野菜料理") {
-        vegType = usedClaude && VEG_TYPES.includes(structured?.vegType) ? structured.vegType : (heuristic.dishCategory === "野菜料理" ? heuristic.vegType : "その他");
+        const titleVeg = inferVegType(title);
+        vegType = titleVeg !== "その他" ? titleVeg
+            : (usedClaude && VEG_TYPES.includes(structured?.vegType) ? structured.vegType : titleVeg);
     }
     const appliance = usedClaude
         ? (APPLIANCES.includes(structured?.appliance) ? structured.appliance : null)
@@ -366,16 +409,41 @@ const KNOWN_GROUP_HEADERS = [
     "生地", "仕上げ", "つけだれ", "漬けだれ", "下ごしらえ", "ドレッシング", "あん", "具材",
     "合わせ調味料", "調味料", "合わせだれ", "煮汁", "つけ汁", "スープ", "衣液", "バッター液",
 ];
+// Recipe sites often name a sub-section with a specific prefix attached to a
+// generic category word, e.g. "ねぎ塩だれ" (ねぎ塩 + だれ), "ごまだれ",
+// "甘辛あん" — these aren't literally in KNOWN_GROUP_HEADERS above but should
+// still be recognized as group headers. Match by suffix instead, capped at a
+// short length so an ordinary sentence that happens to end in one of these
+// words isn't mistaken for a heading.
+const KNOWN_GROUP_SUFFIXES = ["だれ", "ダレ", "ソース", "あん", "アン", "スープ", "ペースト", "ドレッシング"];
+const MAX_GROUP_HEADER_LENGTH = 20;
+function matchesKnownGroup(label) {
+    if (KNOWN_GROUP_HEADERS.includes(label))
+        return true;
+    if (label.length > MAX_GROUP_HEADER_LENGTH)
+        return false;
+    return KNOWN_GROUP_SUFFIXES.some((suf) => label.length > suf.length && label.endsWith(suf));
+}
 // Recipe sites often prefix a group heading with a reference letter, e.g.
 // "（A）合わせ調味料" or "(A) 下味" — strip that before matching against the
 // whitelist above, so the letter itself isn't treated as part of the name.
 const GROUP_LETTER_PREFIX_RE = /^[（(]\s*[A-ZＡ-Ｚ0-9０-９]\s*[）)]\s*/;
+// SNS captions often wrap a whole heading in a decorative bracket pair, e.g.
+// "【ガーリックハニーマスタードソース】" or "「タレ」" — strip the outer
+// pair (only when it wraps the *entire* line) before matching.
+const GROUP_WRAPPER_RE = /^[【\[「『]\s*(.+?)\s*[】\]」』]$/;
+function stripGroupDecoration(line) {
+    let s = line.trim().replace(GROUP_LETTER_PREFIX_RE, "").trim();
+    const wrapped = s.match(GROUP_WRAPPER_RE);
+    if (wrapped)
+        s = wrapped[1].trim();
+    return s;
+}
 function isGroupHeaderLine(line) {
-    const stripped = line.trim().replace(GROUP_LETTER_PREFIX_RE, "").trim();
-    return KNOWN_GROUP_HEADERS.includes(stripped);
+    return matchesKnownGroup(stripGroupDecoration(line));
 }
 function groupHeaderName(line) {
-    return line.trim().replace(GROUP_LETTER_PREFIX_RE, "").trim();
+    return stripGroupDecoration(line);
 }
 // OCR (and some copy-pastes) can insert stray spaces in the middle of
 // Japanese words/units — e.g. "小さ じ 1" instead of "小さじ1", or
@@ -411,6 +479,12 @@ function isNoiseLine(line) {
         return true;
     if (/^#\S+(\s*#\S+)*$/.test(line.trim()))
         return true; // hashtag-only line
+    // Reader-proxy / login-wall boilerplate that shows up when a site (e.g.
+    // Instagram) blocks unauthenticated scraping — these are page furniture,
+    // not recipe content. Matched after collapseIntraLineSpaces has already
+    // stripped internal spaces, so e.g. "URL Source:" becomes "URLSource:".
+    if (/^(URLSource:|MarkdownContent:|Title:|LogIn|SignUp|Nevermind)$/i.test(line.trim()))
+        return true;
     return false;
 }
 // Recipe-site step numbers are small circled-digit icons (①②③) that OCR
@@ -655,7 +729,22 @@ function parseCaptionHeuristic(rawText) {
         seenIngredients.add(key);
         return true;
     });
-    const dedupedSteps = steps.filter((s, i) => s !== steps[i - 1]);
+    const dedupedSteps0 = steps.filter((s, i) => s !== steps[i - 1]);
+    // Some source pages (Instagram reels especially) include the full
+    // caption twice in the fetched markdown — e.g. an og:description meta
+    // block followed by the same text again in the visible page body. That
+    // produces steps [1,2,3,1,2,3] rather than adjacent duplicates, which
+    // the filter above doesn't catch. Detect a whole-list repeat (the
+    // second half exactly matching the first) and drop the repeat.
+    let dedupedSteps = dedupedSteps0;
+    if (dedupedSteps0.length >= 2 && dedupedSteps0.length % 2 === 0) {
+        const half = dedupedSteps0.length / 2;
+        const firstHalf = dedupedSteps0.slice(0, half);
+        const secondHalf = dedupedSteps0.slice(half);
+        if (firstHalf.every((s, i) => s === secondHalf[i])) {
+            dedupedSteps = firstHalf;
+        }
+    }
     const memoLines = lines
         .filter((l) => l.startsWith("★") || l.startsWith("※"))
         .map((l) => l.replace(/^[★※]\s*/, ""));
@@ -836,7 +925,7 @@ recipesは通常1件の配列です。ページ内に、料理名・材料・手
 
 dishCategory・meatTypeは、材料名や手順の文字列に含まれる単語だけで機械的に判定せず、レシピ全体の内容(主菜の食材・調理法)を理解した上で最も適切なものを選んでください。例えば材料に少量だけ肉が入っていても主役が野菜なら「野菜料理」にしてください。
 
-材料名には、代替案や切り方などの注記(例:「ネギ(できれば九条ネギ)」)はそのまま含めてよいですが、「下味」「衣」「タレ」「合わせ調味料」「調味料」のような明確なサブグループの見出しがある場合だけ、材料名の末尾に "(グループ名)" を付けてください(例: "しょうゆ(下味)")。見出しが「（A）合わせ調味料」のように参照用の記号(A・B・①など)付きで書かれている場合は、その記号は無視してグループ名本体だけを使ってください(例: "キッコーマン濃いだし本つゆ(合わせ調味料)")。単なる注記をグループ扱いしないでください。見出しが「(A)」のように記号だけで具体的なグループ名が書かれていない場合、または「A塩…小さじ1/3」「B砂糖、酢…各大さじ1」のように各行の先頭にA・Bなどの記号が直接くっついている場合は、その記号自体を "(グループ名)" として材料名の末尾に付けてください(例: "塩(A)"、"砂糖(B)")。これは、まとまりがあることをアプリ側で表示するために必要です。いずれの場合も、その記号(A・B・①など)が付いている品目を材料リストから省略しないでください。
+材料名には、代替案や切り方などの注記(例:「ネギ(できれば九条ネギ)」)はそのまま含めてよいですが、「下味」「衣」「タレ」「合わせ調味料」「調味料」のような明確なサブグループの見出しがある場合だけ、材料名の末尾に "(グループ名)" を付けてください(例: "しょうゆ(下味)")。見出しが「【調味料】」「【下味】」のように【】で囲まれて書かれていても扱いは同じで、【】は装飾なので取り除き、中の言葉(例: "調味料")だけをグループ名として使ってください(例: 【調味料】の下に "醤油" "酢" とあれば "醤油(調味料)" "酢(調味料)")。「ねぎ塩だれ」「ごまだれ」「甘辛あん」のように、具体的な名前+「だれ/ソース/あん/スープ」などの種類語がついた見出しも同様に明確なサブグループとして扱い、その見出し文字列をそのまま "(グループ名)" として付けてください(例: "ねぎ(ねぎ塩だれ)")。見出しが「（A）合わせ調味料」のように参照用の記号(A・B・①など)付きで書かれている場合は、その記号は無視してグループ名本体だけを使ってください(例: "キッコーマン濃いだし本つゆ(合わせ調味料)")。単なる注記をグループ扱いしないでください。見出しが「(A)」のように記号だけで具体的なグループ名が書かれていない場合、または「A塩…小さじ1/3」「B砂糖、酢…各大さじ1」のように各行の先頭にA・Bなどの記号が直接くっついている場合は、その記号自体を "(グループ名)" として材料名の末尾に付けてください(例: "塩(A)"、"砂糖(B)")。これは、まとまりがあることをアプリ側で表示するために必要です。いずれの場合も、その記号(A・B・①など)が付いている品目を材料リストから省略しないでください。「調味料」「下味」のようにありふれた単語に見えても、材料欄の中で見出しとして機能していれば必ず付けてください。見落としやすいので、材料を書き出した後に、本文にサブグループの見出しがなかったか見直してください。
 
 材料の見つけ方: 本文中に「材料」という語を含む見出し(「材料」「材料(2人分)」など)があれば、そこが本来の材料欄です。その見出しの直後から、次の見出しや「作り方」「①」などの手順の始まりの直前までに列挙されている品目を、1品も欠かさずすべて書き出してください。分量(大さじ・小さじ・g・個数など)が書かれていればそのまま使い、書かれていなければ空欄のままにしてください(適量などと勝手に補わない)。
 このブログ特有の注意点として、記事の冒頭の自己紹介文に「◆大さじ１杯の生クリーム」「◆ローリエ、バルサミコ酢…」のような食材の例が箇条書きで出てくることがありますが、これは直後に「〜は使いません」と続く冗談で、実際の材料ではありません。この部分だけは無視してください——ただし、これはあくまで「材料」見出しより前に出てくる自己紹介文の中の話であり、実際の「材料」見出し以降にある品目は(似た書き方に見えても)すべて本物の材料なので、絶対に省略しないでください。
@@ -1582,6 +1671,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
     const [loaded, setLoaded] = useState(false);
     const [view, setView] = useState(initialView || "list"); // list | add | detail | editRecipe | calendar
     const [detailOrigin, setDetailOrigin] = useState("list"); // "list" | "calendar" — where "一覧へ" should return to
+    const [calendarMode, setCalendarMode] = useState("plan"); // remembers which calendar tab was active across a detail-view detour
     const [addMode, setAddMode] = useState("url");
     const [selectedId, setSelectedId] = useState(null);
     const [editDraft, setEditDraft] = useState(null);
@@ -1868,7 +1958,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
                     const structuredList = await extractWithClaude(textToUse, apiKey);
                     parsedList = structuredList.map((structured) => {
                         const classifyText = `${structured.title || ""} ${textToUse}`;
-                        const inferred = resolveClassification(structured, classifyText, structured.ingredients || [], textToUse, true);
+                        const inferred = resolveClassification(structured, classifyText, structured.ingredients || [], textToUse, true, structured.title || "");
                         return {
                             title: structured.title || "",
                             servings: structured.servings || "",
@@ -1960,7 +2050,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
                 const finalTitle = structured.title || (i === 0 ? pageTitle : "");
                 const classifyText = `${finalTitle} ${pageText.slice(0, 3000)}`;
                 const applianceSource = `${finalTitle} ${(structured.steps || []).join(" ")} ${structured.memo || ""} ${pageText.slice(0, 3000)}`;
-                const inferred = resolveClassification(structured, classifyText, structured.ingredients || [], applianceSource, usedClaude);
+                const inferred = resolveClassification(structured, classifyText, structured.ingredients || [], applianceSource, usedClaude, finalTitle);
                 const recipeData = {
                     title: finalTitle,
                     servings: structured.servings || "",
@@ -2128,7 +2218,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
                 React.createElement(Loader2, { size: 18, className: "spin" }),
                 React.createElement("span", null, "\u8AAD\u307F\u8FBC\u307F\u4E2D..."))),
             loaded && view === "list" && (React.createElement(ListView, { recipes: filtered, total: recipes.length, query: query, setQuery: setQuery, categoryFilter: categoryFilter, setCategoryFilter: setCategoryFilter, meatTypeFilter: meatTypeFilter, setMeatTypeFilter: setMeatTypeFilter, noodleTypeFilter: noodleTypeFilter, setNoodleTypeFilter: setNoodleTypeFilter, vegTypeFilter: vegTypeFilter, setVegTypeFilter: setVegTypeFilter, availableCategories: availableCategories, applianceFilter: applianceFilter, setApplianceFilter: setApplianceFilter, availableAppliances: availableAppliances, favoriteOnly: favoriteOnly, setFavoriteOnly: setFavoriteOnly, viewMode: viewMode, setViewMode: changeViewMode, onAdd: (mode = "url") => { setAddMode(mode); setView("add"); }, onSelect: (id) => { setSelectedId(id); setView("detail"); setConfirmDelete(false); }, onDeleteRecipe: handleDelete, notice: urlImportNotice, onDismissNotice: () => setUrlImportNotice("") })),
-            loaded && view === "calendar" && (React.createElement(LazyCalendarView, { recipes: recipes, mealPlan: mealPlan, onAddEntry: addMealPlanEntry, onRemoveEntry: removeMealPlanEntry, onSetDayEntries: setMealPlanEntries, onBack: () => setView("list"), onSelectRecipe: (id) => { setSelectedId(id); setDetailOrigin("calendar"); setView("detail"); setConfirmDelete(false); } })),
+            loaded && view === "calendar" && (React.createElement(LazyCalendarView, { recipes: recipes, mealPlan: mealPlan, onAddEntry: addMealPlanEntry, onRemoveEntry: removeMealPlanEntry, onSetDayEntries: setMealPlanEntries, onBack: () => setView("list"), onSelectRecipe: (id) => { setSelectedId(id); setDetailOrigin("calendar"); setView("detail"); setConfirmDelete(false); }, initialMode: calendarMode, onModeChange: setCalendarMode })),
             loaded && view === "add" && (React.createElement(AddView, { inputUrl: inputUrl, setInputUrl: setInputUrl, inputText: inputText, setInputText: setInputText, extractError: extractError, onExtract: handleExtract, extracting: extracting, draft: draft, setDraft: setDraft, onSave: handleSaveDraft, onDiscard: () => setDraft(null), saveError: saveError, ocrRunning: ocrRunning, ocrProgress: ocrProgress, ocrError: ocrError, onScreenshots: handleScreenshots, urlImporting: urlImporting, urlImportError: urlImportError, onUrlImport: handleUrlImport, apiKey: apiKey, addMode: addMode, categoryOrder: categoryOrder, applianceOrder: applianceOrder })),
             loaded && view === "detail" && selected && (React.createElement(DetailView, { recipe: selected, onAddToShoppingList: addToShoppingList })),
             loaded && view === "editRecipe" && editDraft && (React.createElement(DraftEditor, { draft: editDraft, setDraft: setEditDraft, onSave: handleUpdateRecipe, onDiscard: () => {
