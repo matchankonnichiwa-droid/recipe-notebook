@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <title>レシピノート</title>
+
+  <!-- iOS home screen behavior -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="レシピノート" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#F7F6F2" />
+  <link rel="apple-touch-icon" href="./icon-180.png" />
+  <link rel="icon" href="./icon-192.png" />
+  <link rel="manifest" href="./manifest.json" />
+
+  <!-- iOS launch screens (shown briefly while the app boots from the home
+       screen) — matches the app's own paper/sage branding. -->
+  <link rel="apple-touch-startup-image" href="./splash/splash-1290x2796.png" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3)" />
+  <link rel="apple-touch-startup-image" href="./splash/splash-1179x2556.png" media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3)" />
+  <link rel="apple-touch-startup-image" href="./splash/splash-1284x2778.png" media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3)" />
+  <link rel="apple-touch-startup-image" href="./splash/splash-1170x2532.png" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3)" />
+  <link rel="apple-touch-startup-image" href="./splash/splash-828x1792.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2)" />
+  <link rel="apple-touch-startup-image" href="./splash/splash-750x1334.png" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2)" />
+
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: #F7F6F2; width: 100%; overflow-x: hidden; -webkit-tap-highlight-color: transparent; }
+    #root { min-height: 100vh; width: 100%; }
+    img, input, textarea, select, button { max-width: 100%; min-width: 0; }
+  </style>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "react": "https://esm.sh/react@18.3.1",
+      "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
+      "react-icons/fi": "https://esm.sh/react-icons@5.2.1/fi?deps=react@18.3.1",
+      "tesseract.js": "https://esm.sh/tesseract.js@5.1.1"
+    }
+  }
+  </script>
+  <!-- Firebase via the official compat CDN (script-tag style) — more
+       reliable than importing the modular SDK through esm.sh, which has
+       known resolution issues with Firebase's subpath exports.
+       `defer` keeps these from blocking initial HTML parsing/paint (they're
+       plain classic scripts, which block by default); deferred scripts
+       still run in document order before our module script (module scripts
+       are deferred implicitly), so app.js can still rely on `firebase`
+       being ready by the time it runs. -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js" defer></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js" defer></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script>
+    window.addEventListener('error', function(e){
+      setTimeout(function(){
+        var r=document.getElementById('root');
+        if(r && !r.innerHTML.trim()){
+          r.innerHTML='<div style="padding:24px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#333"><b>読み込みエラー</b><br><span style="font-size:13px">'+String(e.message||'不明なエラー')+'</span></div>';
+        }
+      },100);
+    });
+    window.addEventListener('unhandledrejection', function(e){
+      setTimeout(function(){
+        var r=document.getElementById('root');
+        if(r && !r.innerHTML.trim()){
+          r.innerHTML='<div style="padding:24px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#333"><b>読み込みエラー</b><br><span style="font-size:13px">'+String((e.reason&&e.reason.message)||e.reason||'不明なエラー')+'</span></div>';
+        }
+      },100);
+    });
+  </script>
+  <script type="module" src="./app.js"></script>
+  <script>
+    // Register the service worker after the page has loaded, so it doesn't
+    // compete with the app's own initial fetches for bandwidth/priority.
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('./sw.js').catch(function () {
+          // If registration fails (e.g. unsupported context), the app still
+          // works fine without the offline/repeat-load cache.
+        });
+      });
+    }
+  </script>
+</body>
+</html>
