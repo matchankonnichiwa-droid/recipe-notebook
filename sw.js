@@ -21,7 +21,14 @@
 // worker at all (see the fetch handler) — the safest fix, since that's the
 // one request type iOS won't tolerate a redirected answer for.
 
-const CACHE_VERSION = "v3";
+// v4 note: found the real reason updates never seemed to stick, even after
+// reopening the app several times. The background revalidation fetch in
+// the "fetch" handler was never wrapped in event.waitUntil() — so the
+// browser was free to kill the service worker the moment it returned the
+// cached response, before the background fetch+cache.put() had a chance to
+// finish. The cache was never actually being updated. Fixed below.
+
+const CACHE_VERSION = "v4";
 const CACHE_NAME = `recipe-app-${CACHE_VERSION}`;
 
 const APP_FILES = [
@@ -118,7 +125,19 @@ self.addEventListener("fetch", (event) => {
                     return stripRedirect(response);
                 })
                 .catch(() => cached); // offline: fall back to whatever's cached
-            return cached || networkFetch;
+            if (cached) {
+                // Serve the cached copy immediately, but keep the service
+                // worker alive with waitUntil() until the background
+                // refetch/cache.put() actually finishes — without this, the
+                // browser can (and reliably does) kill the worker the
+                // instant respondWith() resolves, silently dropping the
+                // "revalidate" half of stale-while-revalidate. That was the
+                // real reason updates never seemed to arrive even after
+                // reopening the app multiple times.
+                event.waitUntil(networkFetch);
+                return cached;
+            }
+            return networkFetch;
         })
     );
 });
