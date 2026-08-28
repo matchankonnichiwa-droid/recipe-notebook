@@ -3438,7 +3438,7 @@ function DraftEditor({ draft, setDraft, onSave, onDiscard, saveError, mode = "cr
                 onClick: () => update({ imageUrl: draft.imageUrl2, imageUrl2: draft.imageUrl }),
                 title: "\u5199\u771F\u306E\u9806\u756A\u3092\u5165\u308C\u66FF\u3048\u308B",
                 style: {
-                    position: "absolute", top: 92 + 6, left: 92 - 14,
+                    position: "absolute", top: 92, left: 92 - 14,
                     display: "flex", alignItems: "center", justifyContent: "center",
                     width: 28, height: 28, borderRadius: 999, zIndex: 1,
                     border: `1px solid ${COLORS.line}`, background: "#fff", color: COLORS.inkSoft, cursor: "pointer",
@@ -3449,7 +3449,7 @@ function DraftEditor({ draft, setDraft, onSave, onDiscard, saveError, mode = "cr
                 onClick: () => update({ imageUrl2: draft.imageUrl3, imageUrl3: draft.imageUrl2 }),
                 title: "\u5199\u771F\u306E\u9806\u756A\u3092\u5165\u308C\u66FF\u3048\u308B",
                 style: {
-                    position: "absolute", top: 92 + 6, left: 92 * 2 - 14,
+                    position: "absolute", top: 92, left: 92 * 2 - 14,
                     display: "flex", alignItems: "center", justifyContent: "center",
                     width: 28, height: 28, borderRadius: 999, zIndex: 1,
                     border: `1px solid ${COLORS.line}`, background: "#fff", color: COLORS.inkSoft, cursor: "pointer",
