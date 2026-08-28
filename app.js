@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createRoot } from "react-dom/client";
-import { FiPlus as Plus, FiSearch as Search, FiInstagram as Instagram, FiLink2 as Link2, FiTrash2 as Trash2, FiChevronLeft as ChevronLeft, FiChevronDown as ChevronDown, FiLoader as Loader2, FiClipboard as ClipboardPaste, FiX as X, FiCheck as Check, FiAlertCircle as AlertCircle, FiBookOpen as BookOpen, FiCamera as Camera, FiMinus as Minus, FiRotateCcw as RotateCcw, FiShuffle as Shuffle, FiEdit2 as Edit2, FiSettings as Settings, FiBookmark as Bookmark, FiGrid as GridIcon, FiList as ListIcon, FiCalendar as CalendarIcon, FiArrowUp as ArrowUp, } from "react-icons/fi";
+import { FiPlus as Plus, FiSearch as Search, FiInstagram as Instagram, FiLink2 as Link2, FiTrash2 as Trash2, FiChevronLeft as ChevronLeft, FiChevronDown as ChevronDown, FiLoader as Loader2, FiClipboard as ClipboardPaste, FiX as X, FiCheck as Check, FiAlertCircle as AlertCircle, FiBookOpen as BookOpen, FiCamera as Camera, FiMinus as Minus, FiRotateCcw as RotateCcw, FiRepeat as Repeat, FiEdit2 as Edit2, FiSettings as Settings, FiBookmark as Bookmark, FiGrid as GridIcon, FiList as ListIcon, FiCalendar as CalendarIcon, FiArrowUp as ArrowUp, } from "react-icons/fi";
 // tesseract.js is a large OCR library (WASM engine + language data) that's
 // only needed for the "screenshot" recipe-import path. Importing it
 // statically here would force every app launch to download and parse it
@@ -3379,24 +3379,27 @@ function DraftEditor({ draft, setDraft, onSave, onDiscard, saveError, mode = "cr
         React.createElement("label", { style: fieldLabelStyle }, "\u6599\u7406\u540D"),
         React.createElement("input", { value: draft.title, onChange: (e) => updateTitle(e.target.value), style: inputStyle }),
         React.createElement("label", { style: fieldLabelStyle }, "\u5199\u771F\uFF08\u6700\u59273\u679A\uFF09"),
-        React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 6, marginBottom: 16 } },
+        React.createElement("div", { style: { display: "flex", alignItems: "flex-start", gap: 6, marginBottom: 16 } },
             [1, 2, 3].map((slot) => {
                 const field = slot === 1 ? "imageUrl" : slot === 2 ? "imageUrl2" : "imageUrl3";
                 const prevField = slot === 2 ? "imageUrl" : slot === 3 ? "imageUrl2" : null;
                 const url = draft[field];
                 const prevUrl = prevField ? draft[prevField] : null;
                 return React.createElement(React.Fragment, { key: slot },
-                    // Swap arrow sits between this slot and the previous one,
-                    // only shown once both have a photo to swap.
+                    // Swap button sits between this slot and the previous
+                    // one, top-aligned with the photos (roughly level with
+                    // their delete "×" buttons) rather than vertically
+                    // centered against the full photo height, only shown
+                    // once both slots have a photo to swap.
                     prevField && prevUrl && url && React.createElement("button", {
                         onClick: () => update({ [prevField]: url, [field]: prevUrl }),
                         title: "\u5199\u771F\u306E\u9806\u756A\u3092\u5165\u308C\u66FF\u3048\u308B",
                         style: {
                             display: "flex", alignItems: "center", justifyContent: "center",
-                            width: 28, height: 28, borderRadius: 999, flexShrink: 0,
+                            width: 28, height: 28, borderRadius: 999, flexShrink: 0, marginTop: 32,
                             border: `1px solid ${COLORS.line}`, background: "#fff", color: COLORS.inkSoft, cursor: "pointer",
                         },
-                    }, React.createElement(Shuffle, { size: 13 })),
+                    }, React.createElement(Repeat, { size: 13 })),
                     url ? React.createElement("div", { style: { position: "relative", width: 92, height: 92, flexShrink: 0 } },
                         React.createElement("img", { src: url, alt: "", onClick: () => { setPhotoSlot(slot); setEditingExistingPhoto(true); }, onError: (e) => {
                                 e.target.style.display = "none";
