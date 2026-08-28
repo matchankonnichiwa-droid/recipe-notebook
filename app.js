@@ -4141,12 +4141,26 @@ function App() {
     // finds to Storage, and rewrites the record with the light URL instead.
     const [photoMigrationStatus, setPhotoMigrationStatus] = useState(null); // null | {done, total} | "done" | "error"
     async function migrateEmbeddedPhotos() {
-        const targets = recipes.filter((r) => (r.imageUrl || "").startsWith("data:") || (r.imageUrl2 || "").startsWith("data:"));
+        // Set a visible "starting" state synchronously, before anything
+        // that could throw — so a click always produces some visible
+        // change even in an edge case we haven't anticipated, rather than
+        // silently doing nothing if something above this point breaks.
+        setPhotoMigrationStatus({ done: 0, total: 0 });
+        let targets;
+        try {
+            targets = recipes.filter((r) => (r.imageUrl || "").startsWith("data:") || (r.imageUrl2 || "").startsWith("data:"));
+        }
+        catch (e) {
+            setPhotoMigrationStatus(null);
+            alert(`写真の整理を開始できませんでした：${e?.message || e}`);
+            return;
+        }
         if (targets.length === 0) {
             setPhotoMigrationStatus("done");
             return;
         }
         setPhotoMigrationStatus({ done: 0, total: targets.length });
+        let failures = 0;
         for (let i = 0; i < targets.length; i++) {
             const r = targets[i];
             try {
@@ -4159,12 +4173,21 @@ function App() {
                 }
                 await writeRecipe({ ...r, ...patch });
             }
-            catch {
+            catch (e) {
                 // Leave this one's photo as-is (still works, just heavy) and
-                // keep going — one failed upload (e.g. a flaky connection
-                // mid-batch) shouldn't stop the rest of the batch.
+                // keep going — one failed upload (e.g. a flaky connection,
+                // or Storage permissions not set up yet) shouldn't stop the
+                // rest of the batch. Surface it once at the end instead of
+                // per-item, so a permissions problem doesn't spam N alerts.
+                failures++;
+                if (failures === 1) {
+                    console.error("photo migration item failed:", e);
+                }
             }
             setPhotoMigrationStatus({ done: i + 1, total: targets.length });
+        }
+        if (failures > 0) {
+            alert(`${failures}件の写真をアップロードできませんでした。Firebase Storageの書き込み権限が設定されていない可能性があります。`);
         }
         setPhotoMigrationStatus("done");
     }
