@@ -3698,6 +3698,7 @@ function SettingsPanel({
     startRenameGroup, saveRenameGroup,
     ungroupedLabel, setUngroupedLabel, saveUngroupedLabel,
     exportBackup, importBackup,
+    migrateEmbeddedPhotos, photoMigrationStatus,
     categoryOrder, applianceOrder, moveCategoryOrder, moveApplianceOrder,
     newApplianceDraft, setNewApplianceDraft, addAppliance, deleteAppliance,
     editingApplianceIndex, editingApplianceName, setEditingApplianceName,
@@ -3791,6 +3792,19 @@ function SettingsPanel({
                 React.createElement("button",{onClick:importBackup,style:row},
                     React.createElement("div",{style:icon},"⇩"),
                     React.createElement("div",null,React.createElement("p",{style:title},"データを復元"),React.createElement("p",{style:sub},"バックアップファイルから戻す")),
+                    React.createElement("span",{style:{marginLeft:"auto",fontSize:20,color:COLORS.inkSoft}},"›"))
+            ),
+            React.createElement("div",{style:card},
+                React.createElement("button",{onClick:migrateEmbeddedPhotos,disabled:photoMigrationStatus && typeof photoMigrationStatus==="object",style:row},
+                    React.createElement("div",{style:icon},"⚡"),
+                    React.createElement("div",null,
+                        React.createElement("p",{style:title},"写真を軽量化する"),
+                        React.createElement("p",{style:sub},
+                            photoMigrationStatus && typeof photoMigrationStatus==="object"
+                                ? `処理中… ${photoMigrationStatus.done}/${photoMigrationStatus.total}件`
+                                : photoMigrationStatus==="done"
+                                    ? "完了しました。起動が軽くなっているはずです。"
+                                    : "古いレシピの写真データを整理して、起動を速くします")),
                     React.createElement("span",{style:{marginLeft:"auto",fontSize:20,color:COLORS.inkSoft}},"›"))
             ),
             React.createElement("div",{style:card},
@@ -4117,6 +4131,43 @@ function App() {
         };
         input.click();
     }
+    // One-time cleanup for recipes saved before photos were moved to
+    // Storage (see uploadRecipePhoto/saveRecipe above): those still have
+    // the full base64 image baked directly into their Realtime Database
+    // record, which is what makes every app launch slow as the recipe
+    // count grows — the whole `recipes` node, images included, is what
+    // gets fetched and re-JSON.stringify'd into localStorage on load. This
+    // walks every saved recipe, uploads any inline data-URL photos it
+    // finds to Storage, and rewrites the record with the light URL instead.
+    const [photoMigrationStatus, setPhotoMigrationStatus] = useState(null); // null | {done, total} | "done" | "error"
+    async function migrateEmbeddedPhotos() {
+        const targets = recipes.filter((r) => (r.imageUrl || "").startsWith("data:") || (r.imageUrl2 || "").startsWith("data:"));
+        if (targets.length === 0) {
+            setPhotoMigrationStatus("done");
+            return;
+        }
+        setPhotoMigrationStatus({ done: 0, total: targets.length });
+        for (let i = 0; i < targets.length; i++) {
+            const r = targets[i];
+            try {
+                const patch = {};
+                if ((r.imageUrl || "").startsWith("data:")) {
+                    patch.imageUrl = await uploadRecipePhoto(r.imageUrl, r.id, "imageUrl");
+                }
+                if ((r.imageUrl2 || "").startsWith("data:")) {
+                    patch.imageUrl2 = await uploadRecipePhoto(r.imageUrl2, r.id, "imageUrl2");
+                }
+                await writeRecipe({ ...r, ...patch });
+            }
+            catch {
+                // Leave this one's photo as-is (still works, just heavy) and
+                // keep going — one failed upload (e.g. a flaky connection
+                // mid-batch) shouldn't stop the rest of the batch.
+            }
+            setPhotoMigrationStatus({ done: i + 1, total: targets.length });
+        }
+        setPhotoMigrationStatus("done");
+    }
 
     function saveUngroupedLabel(listKey) {
         const label = (editingUngroupedLabel[listKey] || "").trim() || "グループなし";
@@ -4191,6 +4242,8 @@ function App() {
             saveUngroupedLabel: () => saveUngroupedLabel("shopping"),
             exportBackup: exportBackup,
             importBackup: importBackup,
+            migrateEmbeddedPhotos: migrateEmbeddedPhotos,
+            photoMigrationStatus: photoMigrationStatus,
             categoryOrder: categoryOrder,
             applianceOrder: applianceOrder,
             moveCategoryOrder: moveCategoryOrder,
