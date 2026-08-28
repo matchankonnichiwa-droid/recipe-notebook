@@ -206,9 +206,9 @@ export function CropOverlay({ src, index, total, onConfirm, onUseFull, onSkip })
         React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 6 } },
             React.createElement(Crop, { size: 16, color: COLORS.accent }),
             React.createElement("p", { style: { fontSize: 13, fontWeight: 700, margin: 0 } },
-                "\u753B\u50CF \",
+                "\u753B\u50CF ",
                 index + 1,
-                "/\",
+                "/",
                 total)),
         React.createElement("p", { style: { fontSize: 12.5, color: COLORS.inkSoft, lineHeight: 1.6, margin: "0 0 12px" } }, "\u6587\u5B57\u304C\u66F8\u3044\u3066\u3042\u308B\u90E8\u5206\u3060\u3051\u3092\u6307\u3067\u30C9\u30E9\u30C3\u30B0\u3057\u3066\u56F2\u3093\u3067\u304F\u3060\u3055\u3044\u3002\u5199\u771F\u3084\u5E83\u544A\u3001\u4E0B\u90E8\u306E\u30E1\u30CB\u30E5\u30FC\u306F\u5916\u3059\u3068\u8AAD\u307F\u53D6\u308A\u7CBE\u5EA6\u304C\u4E0A\u304C\u308A\u307E\u3059\u3002\u56F2\u307E\u306A\u3051\u308C\u3070\u753B\u50CF\u5168\u4F53\u3092\u8AAD\u307F\u53D6\u308A\u307E\u3059\u3002\u753B\u50CF\u304C\u6A2A\u5411\u304D\u30FB\u9006\u3055\u3084\u306E\u5834\u5408\u306F\u3001\u56DE\u8EE2\u30DC\u30BF\u30F3\u3067\u5411\u304D\u3092\u76F4\u3057\u3066\u304B\u3089\u56F2\u3093\u3067\u304F\u3060\u3055\u3044\u3002"),
         React.createElement("div", { ref: containerRef, onMouseDown: handleStart, onMouseMove: handleMove, onMouseUp: handleEnd, onTouchStart: handleStart, onTouchMove: handleMove, onTouchEnd: handleEnd, style: {
