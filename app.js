@@ -1967,7 +1967,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
     const handleCropSkip = () => {
         advanceCropQueue(cropResults);
     };
-    const advanceCropQueue = (resultsSoFar) => {
+    const advanceCropQueue = async (resultsSoFar) => {
         if (cropIndex + 1 < cropQueue.length) {
             setCropResults(resultsSoFar);
             setCropIndex((i) => i + 1);
@@ -1984,31 +1984,24 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
             // known — rather than back when the files were first picked,
             // so a photo that needed rotating comes out right-side-up here
             // too.
-            if (resultsSoFar[0]) {
-                fileToColorDataUrl(resultsSoFar[0].file, 900, resultsSoFar[0].rotation)
-                    .then((dataUrl) => setScreenshotImageUrl(dataUrl))
-                    .catch(() => {
-                    // non-critical — just skip attaching a photo
-                });
-            }
-            if (resultsSoFar[1]) {
-                fileToColorDataUrl(resultsSoFar[1].file, 900, resultsSoFar[1].rotation)
-                    .then((dataUrl) => setScreenshotImageUrl2(dataUrl))
-                    .catch(() => {
-                    // non-critical — just skip attaching a second photo
-                });
-            }
-            if (resultsSoFar[2]) {
-                fileToColorDataUrl(resultsSoFar[2].file, 900, resultsSoFar[2].rotation)
-                    .then((dataUrl) => setScreenshotImageUrl3(dataUrl))
-                    .catch(() => {
-                    // non-critical — just skip attaching a third photo
-                });
-            }
-            runOcrBatch(resultsSoFar);
+            //
+            // Awaited (not fire-and-forget) and passed straight through to
+            // runOcrBatch/handleExtract as a parameter, rather than relying
+            // on the screenshotImageUrl* state being updated in time: those
+            // functions were already in flight by the time setState here
+            // would resolve into a new render, so reading the state inside
+            // them was seeing a stale (empty) closure and every imported
+            // photo was silently getting dropped from the saved recipe.
+            const photoUrls = await Promise.all([resultsSoFar[0], resultsSoFar[1], resultsSoFar[2]].map((item) => item
+                ? fileToColorDataUrl(item.file, 900, item.rotation).catch(() => "")
+                : Promise.resolve("")));
+            setScreenshotImageUrl(photoUrls[0]);
+            setScreenshotImageUrl2(photoUrls[1]);
+            setScreenshotImageUrl3(photoUrls[2]);
+            runOcrBatch(resultsSoFar, photoUrls);
         }
     };
-    const runOcrBatch = async (items) => {
+    const runOcrBatch = async (items, photoUrls) => {
         if (!items.length)
             return;
         setOcrRunning(true);
@@ -2053,7 +2046,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
             }
             if (apiKey && combined.trim()) {
                 setOcrProgress("レシピを抽出中...");
-                await handleExtract(fullText);
+                await handleExtract(fullText, photoUrls);
             }
         }
         catch (e) {
@@ -2106,7 +2099,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
     // overrideText lets callers (like the screenshot-OCR flow) trigger
     // extraction immediately with freshly-read text, without waiting on a
     // state update round-trip.
-    const handleExtract = async (overrideText) => {
+    const handleExtract = async (overrideText, photoUrls) => {
         const textToUse = typeof overrideText === "string" ? overrideText : inputText;
         if (!textToUse.trim()) {
             setExtractError("投稿のキャプション文を貼り付けてください。");
@@ -2154,9 +2147,9 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
                     ...parsed,
                     sourceUrl: inputUrl.trim(),
                     sourceType: detectSource(inputUrl),
-                    imageUrl: screenshotImageUrl || "",
-                    imageUrl2: screenshotImageUrl2 || "",
-                    imageUrl3: screenshotImageUrl3 || "",
+                    imageUrl: (photoUrls ? photoUrls[0] : screenshotImageUrl) || "",
+                    imageUrl2: (photoUrls ? photoUrls[1] : screenshotImageUrl2) || "",
+                    imageUrl3: (photoUrls ? photoUrls[2] : screenshotImageUrl3) || "",
                 };
                 savedRecipes.push(await saveRecipe(recipeData));
             }
@@ -3379,7 +3372,7 @@ function DraftEditor({ draft, setDraft, onSave, onDiscard, saveError, mode = "cr
         React.createElement("label", { style: fieldLabelStyle }, "\u6599\u7406\u540D"),
         React.createElement("input", { value: draft.title, onChange: (e) => updateTitle(e.target.value), style: inputStyle }),
         React.createElement("label", { style: fieldLabelStyle }, "\u5199\u771F\uFF08\u6700\u59273\u679A\uFF09"),
-        React.createElement("div", { style: { position: "relative", marginBottom: 16 } },
+        React.createElement("div", { style: { position: "relative", marginTop: 20, marginBottom: 16 } },
             React.createElement("div", { style: { display: "flex", alignItems: "flex-start", gap: 0 } },
                 [1, 2, 3].map((slot) => {
                     const field = slot === 1 ? "imageUrl" : slot === 2 ? "imageUrl2" : "imageUrl3";
@@ -3445,7 +3438,7 @@ function DraftEditor({ draft, setDraft, onSave, onDiscard, saveError, mode = "cr
                 onClick: () => update({ imageUrl: draft.imageUrl2, imageUrl2: draft.imageUrl }),
                 title: "\u5199\u771F\u306E\u9806\u756A\u3092\u5165\u308C\u66FF\u3048\u308B",
                 style: {
-                    position: "absolute", top: -14, left: 92 - 14,
+                    position: "absolute", top: -36, left: 92 - 14,
                     display: "flex", alignItems: "center", justifyContent: "center",
                     width: 28, height: 28, borderRadius: 999, zIndex: 1,
                     border: `1px solid ${COLORS.line}`, background: "#fff", color: COLORS.inkSoft, cursor: "pointer",
@@ -3456,7 +3449,7 @@ function DraftEditor({ draft, setDraft, onSave, onDiscard, saveError, mode = "cr
                 onClick: () => update({ imageUrl2: draft.imageUrl3, imageUrl3: draft.imageUrl2 }),
                 title: "\u5199\u771F\u306E\u9806\u756A\u3092\u5165\u308C\u66FF\u3048\u308B",
                 style: {
-                    position: "absolute", top: -14, left: 92 * 2 - 14,
+                    position: "absolute", top: -36, left: 92 * 2 - 14,
                     display: "flex", alignItems: "center", justifyContent: "center",
                     width: 28, height: 28, borderRadius: 999, zIndex: 1,
                     border: `1px solid ${COLORS.line}`, background: "#fff", color: COLORS.inkSoft, cursor: "pointer",
