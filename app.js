@@ -523,13 +523,25 @@ function stripStepMarker(line) {
 // "![alt](url)" inline in the flow of text — without stripping this, a
 // recipe step like "①全てを混ぜる" ends up polluted with the raw image
 // markdown and URL that followed it in the source markdown.
+// Instagram's "Never miss a post from X — Sign up..." follow-prompt widget
+// text. It has no line breaks of its own in scraped markdown, so it glues
+// onto whatever real caption text surrounds it (e.g. "...作ってみてね
+// Nevermissapostfromhotcook_kira_8855Signupfor...ホットクック4台持ち...").
+// Since there's no fixed ending for the boilerplate, strip from the trigger
+// phrase up through the next run of Japanese text. Exported separately (not
+// just folded into stripMarkdownNoise) because the URL-import path sends
+// raw page text straight to the AI extraction prompt without going through
+// stripMarkdownNoise first — this needs to run there too.
+function stripInstagramWidgetNoise(text) {
+    return text.replace(/Never\s*miss\s*a\s*post\s*from[^\u3040-\u30ff\u4e00-\u9fff]*?(?=[\u3040-\u30ff\u4e00-\u9fff]|$)/giu, " ");
+}
 function stripMarkdownNoise(text) {
-    return text
+    return stripInstagramWidgetNoise(text
         .replace(/!\[[^\]]*\]\([^)]*\)/g, " ") // markdown images
         .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1") // markdown links -> keep visible text
         .replace(/https?:\/\/\S+/g, " ") // bare URLs
         .replace(/\[\s*\]/g, " ") // leftover empty brackets
-        .replace(/[ \t]{2,}/g, " ");
+        .replace(/[ \t]{2,}/g, " "));
 }
 // Pulls out a hero image URL from the page's markdown. Prefers the image
 // positioned right before the "材料" heading — on SNS posts, an earlier
@@ -1325,7 +1337,24 @@ function TodoApp({ listKey, myName, ungroupedLabel }) {
         saveItems(activeList, items[activeList].filter((t) => !t.done));
     }
     function completeAll() {
-        saveItems(activeList, items[activeList].map((t) => (t.done ? t : { ...t, done: true })));
+        // Only complete the items currently shown under the active tab
+        // (groupFilter) — not every item in the whole list. This mirrors
+        // the same filter logic used for `visible` below (kept separate
+        // here since completeAll is defined before `visible` exists yet
+        // closes over the same render's values by the time it's actually
+        // invoked from a click).
+        const idsToComplete = new Set(currentItems
+            .filter((t) => {
+            if (groupFilter === "all")
+                return true;
+            if (groupFilter === RECIPE_GROUP)
+                return t.source === "recipe";
+            if (groupFilter === NO_GROUP)
+                return t.source !== "recipe" && (!t.groupId || !currentGroups.some((g) => g.id === t.groupId));
+            return t.groupId === groupFilter;
+        })
+            .map((t) => t.id));
+        saveItems(activeList, items[activeList].map((t) => (idsToComplete.has(t.id) && !t.done ? { ...t, done: true } : t)));
     }
     function setItemDueDate(id, dateStr) {
         saveItems(activeList, items[activeList].map((t) => (t.id === id ? { ...t, dueDate: dateStr || null } : t)));
@@ -2021,7 +2050,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
         setUrlImportNotice("");
         setUrlImporting(true);
         try {
-            const pageText = await fetchPageText(url, jinaApiKey);
+            const pageText = stripInstagramWidgetNoise(await fetchPageText(url, jinaApiKey));
             const imageUrl = extractHeroImageUrl(pageText);
             const pageTitle = extractPageTitle(pageText);
             let structuredList;
@@ -2079,8 +2108,15 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
                 // Instagram in particular often blocks the fetch from seeing
                 // the real caption at all — better to say so plainly than
                 // to silently leave someone with a title-only, empty recipe
-                // and no idea why.
-                setUrlImportNotice("材料・手順を読み取れませんでした。ページの本文が取得できなかった可能性があります。レシピは仮の状態で保存したので、開いて「テキストから」でキャプションを貼り付けるか、スクリーンショットで読み取り直してください。");
+                // and no idea why. YouTube has its own distinct failure
+                // mode: the description text does exist, but it lives
+                // behind a "もっと見る" (show more) toggle and is loaded
+                // by client-side JS that the page-fetch may not run, so
+                // the reader often only sees the first line or two.
+                const isYouTube = /(?:^|\.)youtube\.com|(?:^|\.)youtu\.be/i.test(url);
+                setUrlImportNotice(isYouTube
+                    ? "材料・手順を読み取れませんでした。YouTubeの概要欄は「もっと見る」で隠れている部分をうまく読み取れないことが多いです。概要欄を開いた状態のスクリーンショットを撮って、下の「スクリーンショットから読み取る」で取り込み直してみてください。"
+                    : "材料・手順を読み取れませんでした。ページの本文が取得できなかった可能性があります。レシピは仮の状態で保存したので、開いて「テキストから」でキャプションを貼り付けるか、スクリーンショットで読み取り直してください。");
                 setView("list");
             }
             else {
