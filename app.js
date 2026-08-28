@@ -637,6 +637,14 @@ function parseCaptionHeuristic(rawText) {
     const lines = cleanedText
         .split(/\r?\n/)
         .map((l) => l.trim())
+        // Blog pages fetched as markdown use "#"/"##"/"###" heading markers
+        // extensively — for section titles like "### 材料" but also, on
+        // many recipe blogs, for the numbered step titles themselves (e.g.
+        // "### 1.内鍋に鶏むね肉をいれる"). Without stripping this prefix,
+        // none of the line-classification checks below (heading match,
+        // step-marker digit match, group-header match) ever fire, since
+        // they all test the start of the string.
+        .map((l) => l.replace(/^#{1,6}\s*/, ""))
         .filter((l) => l.length > 0);
     // Prefer a serving-count mention found shortly after the "材料" heading —
     // a parenthetical match anywhere in the text is unreliable, since posts
