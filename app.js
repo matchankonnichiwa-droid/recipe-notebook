@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createRoot } from "react-dom/client";
-import { FiPlus as Plus, FiSearch as Search, FiInstagram as Instagram, FiLink2 as Link2, FiTrash2 as Trash2, FiChevronLeft as ChevronLeft, FiChevronDown as ChevronDown, FiLoader as Loader2, FiClipboard as ClipboardPaste, FiX as X, FiCheck as Check, FiAlertCircle as AlertCircle, FiBookOpen as BookOpen, FiCamera as Camera, FiMinus as Minus, FiRotateCcw as RotateCcw, FiEdit2 as Edit2, FiSettings as Settings, FiBookmark as Bookmark, FiGrid as GridIcon, FiList as ListIcon, FiCalendar as CalendarIcon, FiArrowUp as ArrowUp, } from "react-icons/fi";
+import { FiPlus as Plus, FiSearch as Search, FiInstagram as Instagram, FiLink2 as Link2, FiTrash2 as Trash2, FiChevronLeft as ChevronLeft, FiChevronDown as ChevronDown, FiLoader as Loader2, FiClipboard as ClipboardPaste, FiX as X, FiCheck as Check, FiAlertCircle as AlertCircle, FiBookOpen as BookOpen, FiCamera as Camera, FiMinus as Minus, FiRotateCcw as RotateCcw, FiShuffle as Shuffle, FiEdit2 as Edit2, FiSettings as Settings, FiBookmark as Bookmark, FiGrid as GridIcon, FiList as ListIcon, FiCalendar as CalendarIcon, FiArrowUp as ArrowUp, } from "react-icons/fi";
 // tesseract.js is a large OCR library (WASM engine + language data) that's
 // only needed for the "screenshot" recipe-import path. Importing it
 // statically here would force every app launch to download and parse it
@@ -3427,7 +3427,7 @@ function DraftEditor({ draft, setDraft, onSave, onDiscard, saveError, mode = "cr
                     width: 36, height: 36, borderRadius: 999, flexShrink: 0,
                     border: `1px solid ${COLORS.line}`, background: "#fff", color: COLORS.inkSoft, cursor: "pointer",
                 },
-            }, React.createElement(RotateCcw, { size: 15 }))),
+            }, React.createElement(Shuffle, { size: 15 }))),
         (pendingPhotoFile || editingExistingPhoto) && React.createElement(LazyPhotoPositionEditor, {
             file: pendingPhotoFile || undefined,
             source: !pendingPhotoFile && editingExistingPhoto ? draft[photoSlot === 2 ? "imageUrl2" : "imageUrl"] : undefined,
