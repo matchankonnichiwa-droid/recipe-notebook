@@ -20,12 +20,15 @@ const COLORS = {
     chipBg: "#EEEDE8",
 };
 const MAIN_CATEGORIES = ["ご飯もの", "肉料理", "魚介料理", "麺類"];
-const SIDE_CATEGORIES = ["野菜料理", "スープ・鍋"];
+const SIDE_CATEGORIES = ["野菜料理"];
+const SOUP_CATEGORIES = ["スープ・鍋"];
 function entryRole(entry) {
     if (MAIN_CATEGORIES.includes(entry.dishCategory))
         return { label: "主菜", color: "#C0604A", bg: "#FBEAE5" };
     if (SIDE_CATEGORIES.includes(entry.dishCategory))
         return { label: "副菜", color: "#3F7A4E", bg: "#DFF0E1" };
+    if (SOUP_CATEGORIES.includes(entry.dishCategory))
+        return { label: "スープ", color: "#3E6E8E", bg: "#E3EEF4" };
     return null;
 }
 // Meal-plan entries store a snapshot of {recipeId,title,imageUrl,...} taken
@@ -48,7 +51,7 @@ function liveEntry(entry, recipesById) {
 // Dish card used in the edit view: photo, role badge, remove (X), and a
 // "変更する" swap link — one card per assigned recipe.
 function DishCard({ entry, roleLabel, onSelectRecipe, onRemoveEntry, onSwapEntry }) {
-    const role = entryRole(entry) || (roleLabel === "主菜" ? { label: "主菜", color: "#C0604A", bg: "#FBEAE5" } : roleLabel === "副菜" ? { label: "副菜", color: "#3F7A4E", bg: "#DFF0E1" } : null);
+    const role = entryRole(entry) || (roleLabel === "主菜" ? { label: "主菜", color: "#C0604A", bg: "#FBEAE5" } : roleLabel === "副菜" ? { label: "副菜", color: "#3F7A4E", bg: "#DFF0E1" } : roleLabel === "スープ" ? { label: "スープ", color: "#3E6E8E", bg: "#E3EEF4" } : null);
     return React.createElement("div", { style: { borderRadius: 14, overflow: "hidden", background: "#fff", border: `1px solid ${COLORS.line}` } },
         React.createElement("div", { style: { position: "relative", width: "100%", height: 112, background: COLORS.chipBg } },
             React.createElement("div", { onClick: () => onSelectRecipe && onSelectRecipe(entry.recipeId), style: {
@@ -79,6 +82,7 @@ function DishCard({ entry, roleLabel, onSelectRecipe, onRemoveEntry, onSwapEntry
 function EmptySlotCard({ roleLabel, onAdd }) {
     const role = roleLabel === "主菜" ? { label: "主菜", color: "#C0604A", bg: "#FBEAE5" }
         : roleLabel === "副菜" ? { label: "副菜", color: "#3F7A4E", bg: "#DFF0E1" }
+        : roleLabel === "スープ" ? { label: "スープ", color: "#3E6E8E", bg: "#E3EEF4" }
             : { label: roleLabel, color: COLORS.inkSoft, bg: COLORS.chipBg };
     return React.createElement("button", { onClick: onAdd, style: {
             borderRadius: 14, border: `1.5px dashed ${COLORS.line}`, background: "none", padding: 0, cursor: "pointer",
@@ -357,9 +361,14 @@ export function CalendarView({ recipes, mealPlan, onAddEntry, onRemoveEntry, onS
             already.add(main.id);
         }
         const side = pick(SIDE_CATEGORIES);
-        if (side)
+        if (side) {
             onAddEntry(dateStr, side);
-        return { main, side };
+            already.add(side.id);
+        }
+        const soup = pick(SOUP_CATEGORIES);
+        if (soup)
+            onAddEntry(dateStr, soup);
+        return { main, side, soup };
     }
     function handleGenerate() {
         if (selected.size === 0)
@@ -374,11 +383,13 @@ export function CalendarView({ recipes, mealPlan, onAddEntry, onRemoveEntry, onS
             const [y, m, d] = dateStr.split("-").map(Number);
             const date = new Date(y, m - 1, d);
             const avoidIds = new Set(history.filter((h) => Math.abs((date - h.date) / 86400000) <= 21).map((h) => h.recipeId));
-            const { main, side } = pickForDay(dateStr, avoidIds);
+            const { main, side, soup } = pickForDay(dateStr, avoidIds);
             if (main)
                 history.push({ date, recipeId: main.id });
             if (side)
                 history.push({ date, recipeId: side.id });
+            if (soup)
+                history.push({ date, recipeId: soup.id });
         });
         setSelected(new Set());
         setMode("edit");
@@ -388,7 +399,10 @@ export function CalendarView({ recipes, mealPlan, onAddEntry, onRemoveEntry, onS
         const old = entries.find((e) => e.recipeId === oldRecipeId);
         if (!old)
             return;
-        const pool = MAIN_CATEGORIES.includes(old.dishCategory) ? MAIN_CATEGORIES : SIDE_CATEGORIES.includes(old.dishCategory) ? SIDE_CATEGORIES : null;
+        const pool = MAIN_CATEGORIES.includes(old.dishCategory) ? MAIN_CATEGORIES
+            : SIDE_CATEGORIES.includes(old.dishCategory) ? SIDE_CATEGORIES
+            : SOUP_CATEGORIES.includes(old.dishCategory) ? SOUP_CATEGORIES
+                : null;
         if (!pool)
             return;
         const already = new Set(entries.map((e) => e.recipeId));
@@ -480,11 +494,12 @@ export function CalendarView({ recipes, mealPlan, onAddEntry, onRemoveEntry, onS
                                     display: "flex", alignItems: "center", gap: 3, border: "none", background: "none",
                                     color: COLORS.plum, fontWeight: 700, fontSize: 11.5, cursor: "pointer", padding: "2px 4px",
                                 } }, React.createElement(Trash2, { size: 12 }), "\u524A\u9664")),
-                        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 } },
+                        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 } },
                             (() => {
                                 const mainEntry = entries.find((e) => MAIN_CATEGORIES.includes(e.dishCategory));
                                 const sideEntry = entries.find((e) => SIDE_CATEGORIES.includes(e.dishCategory));
-                                const freeEntry = entries.find((e) => e !== mainEntry && e !== sideEntry);
+                                const soupEntry = entries.find((e) => SOUP_CATEGORIES.includes(e.dishCategory));
+                                const freeEntry = entries.find((e) => e !== mainEntry && e !== sideEntry && e !== soupEntry);
                                 return [
                                     mainEntry
                                         ? React.createElement(DishCard, { key: "main", entry: liveEntry(mainEntry, recipesById), roleLabel: "\u4E3B\u83DC", onSelectRecipe: onSelectRecipe, onRemoveEntry: (recipeId) => onRemoveEntry(dateStr, recipeId), onSwapEntry: (recipeId) => swapEntry(dateStr, recipeId) })
@@ -492,6 +507,9 @@ export function CalendarView({ recipes, mealPlan, onAddEntry, onRemoveEntry, onS
                                     sideEntry
                                         ? React.createElement(DishCard, { key: "side", entry: liveEntry(sideEntry, recipesById), roleLabel: "\u526F\u83DC", onSelectRecipe: onSelectRecipe, onRemoveEntry: (recipeId) => onRemoveEntry(dateStr, recipeId), onSwapEntry: (recipeId) => swapEntry(dateStr, recipeId) })
                                         : React.createElement(EmptySlotCard, { key: "side", roleLabel: "\u526F\u83DC", onAdd: () => setAddSlotFor({ dateStr, pool: SIDE_CATEGORIES }) }),
+                                    soupEntry
+                                        ? React.createElement(DishCard, { key: "soup", entry: liveEntry(soupEntry, recipesById), roleLabel: "\u30B9\u30FC\u30D7", onSelectRecipe: onSelectRecipe, onRemoveEntry: (recipeId) => onRemoveEntry(dateStr, recipeId), onSwapEntry: (recipeId) => swapEntry(dateStr, recipeId) })
+                                        : React.createElement(EmptySlotCard, { key: "soup", roleLabel: "\u30B9\u30FC\u30D7", onAdd: () => setAddSlotFor({ dateStr, pool: SOUP_CATEGORIES }) }),
                                     freeEntry
                                         ? React.createElement(DishCard, { key: "free", entry: liveEntry(freeEntry, recipesById), onSelectRecipe: onSelectRecipe, onRemoveEntry: (recipeId) => onRemoveEntry(dateStr, recipeId) })
                                         : React.createElement(EmptySlotCard, { key: "free", roleLabel: "\u3082\u30461\u54C1", onAdd: () => setAddSlotFor({ dateStr, pool: null }) }),

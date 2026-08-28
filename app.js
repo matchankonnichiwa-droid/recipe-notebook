@@ -3379,69 +3379,55 @@ function DraftEditor({ draft, setDraft, onSave, onDiscard, saveError, mode = "cr
         React.createElement("label", { style: fieldLabelStyle }, "\u6599\u7406\u540D"),
         React.createElement("input", { value: draft.title, onChange: (e) => updateTitle(e.target.value), style: inputStyle }),
         React.createElement("label", { style: fieldLabelStyle }, "\u5199\u771F\uFF08\u6700\u59273\u679A\uFF09"),
-        React.createElement("div", { style: { display: "flex", alignItems: "flex-start", gap: 6, marginBottom: 16 } },
-            [1, 2, 3].map((slot) => {
-                const field = slot === 1 ? "imageUrl" : slot === 2 ? "imageUrl2" : "imageUrl3";
-                const prevField = slot === 2 ? "imageUrl" : slot === 3 ? "imageUrl2" : null;
-                const url = draft[field];
-                const prevUrl = prevField ? draft[prevField] : null;
-                return React.createElement(React.Fragment, { key: slot },
-                    // Swap button sits between this slot and the previous
-                    // one, top-aligned with the photos (roughly level with
-                    // their delete "×" buttons) rather than vertically
-                    // centered against the full photo height, only shown
-                    // once both slots have a photo to swap.
-                    prevField && prevUrl && url && React.createElement("button", {
-                        onClick: () => update({ [prevField]: url, [field]: prevUrl }),
-                        title: "\u5199\u771F\u306E\u9806\u756A\u3092\u5165\u308C\u66FF\u3048\u308B",
-                        style: {
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            width: 28, height: 28, borderRadius: 999, flexShrink: 0, marginTop: 32,
-                            border: `1px solid ${COLORS.line}`, background: "#fff", color: COLORS.inkSoft, cursor: "pointer",
-                        },
-                    }, React.createElement(Repeat, { size: 13 })),
-                    url ? React.createElement("div", { style: { position: "relative", width: 92, height: 92, flexShrink: 0 } },
-                        React.createElement("img", { src: url, alt: "", onClick: () => { setPhotoSlot(slot); setEditingExistingPhoto(true); }, onError: (e) => {
-                                e.target.style.display = "none";
-                            }, style: {
-                                width: "100%",
-                                height: "100%",
-                                objectFit: "cover",
-                                borderRadius: 12,
-                                border: `1px solid ${COLORS.line}`,
-                                display: "block",
-                                cursor: "pointer",
-                            } }),
-                        React.createElement("div", { style: {
-                                position: "absolute", left: 4, bottom: 4, width: 22, height: 22, borderRadius: 11,
-                                background: "rgba(32,35,31,0.55)", display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none"
-                            } }, React.createElement(Edit2, { size: 11, color: "#fff" })),
-                        React.createElement("button", { onClick: () => update({ [field]: "" }), style: {
-                                position: "absolute",
-                                top: -6,
-                                right: -6,
-                                background: COLORS.plum,
-                                border: "2px solid #fff",
-                                borderRadius: 999,
-                                width: 24,
-                                height: 24,
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                            }, "aria-label": "\u5199\u771F\u3092\u524A\u9664" },
-                            React.createElement(X, { size: 13, color: "#fff" })))
-                        : React.createElement("label", { style: {
-                                width: 92,
-                                height: 92,
-                                flexShrink: 0,
-                                borderRadius: 12,
-                                border: `1.5px dashed ${COLORS.accent}`,
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                cursor: "pointer",
-                            } },
-                            React.createElement(Plus, { size: 26, color: COLORS.accent }),
+        React.createElement("div", { style: { position: "relative", marginBottom: 16 } },
+            React.createElement("div", { style: { display: "flex", alignItems: "flex-start", gap: 0 } },
+                [1, 2, 3].map((slot) => {
+                    const field = slot === 1 ? "imageUrl" : slot === 2 ? "imageUrl2" : "imageUrl3";
+                    const url = draft[field];
+                    return React.createElement(React.Fragment, { key: slot },
+                        url ? React.createElement("div", { style: { position: "relative", width: 92, height: 92, flexShrink: 0 } },
+                            React.createElement("img", { src: url, alt: "", onClick: () => { setPhotoSlot(slot); setEditingExistingPhoto(true); }, onError: (e) => {
+                                    e.target.style.display = "none";
+                                }, style: {
+                                    width: "100%",
+                                    height: "100%",
+                                    objectFit: "cover",
+                                    borderRadius: 12,
+                                    border: `1px solid ${COLORS.line}`,
+                                    display: "block",
+                                    cursor: "pointer",
+                                } }),
+                            React.createElement("div", { style: {
+                                    position: "absolute", left: 4, bottom: 4, width: 22, height: 22, borderRadius: 11,
+                                    background: "rgba(32,35,31,0.55)", display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none"
+                                } }, React.createElement(Edit2, { size: 11, color: "#fff" })),
+                            React.createElement("button", { onClick: () => update({ [field]: "" }), style: {
+                                    position: "absolute",
+                                    top: -6,
+                                    right: -6,
+                                    background: COLORS.plum,
+                                    border: "2px solid #fff",
+                                    borderRadius: 999,
+                                    width: 24,
+                                    height: 24,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                }, "aria-label": "\u5199\u771F\u3092\u524A\u9664" },
+                                React.createElement(X, { size: 13, color: "#fff" })))
+                            : React.createElement("label", { style: {
+                                    width: 92,
+                                    height: 92,
+                                    flexShrink: 0,
+                                    borderRadius: 12,
+                                    border: `1.5px dashed ${COLORS.accent}`,
+                                    marginLeft: slot > 1 ? 6 : 0,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    cursor: "pointer",
+                                } },
+                                React.createElement(Plus, { size: 26, color: COLORS.accent }),
                             React.createElement("input", { type: "file", accept: "image/*", style: { display: "none" }, onChange: (e) => {
                                     const file = e.target.files?.[0];
                                     e.target.value = "";
@@ -3450,7 +3436,33 @@ function DraftEditor({ draft, setDraft, onSave, onDiscard, saveError, mode = "cr
                                     setPhotoSlot(slot);
                                     setPendingPhotoFile(file);
                                 } })));
-            })),
+                })),
+            // Swap buttons float above the seam between two adjacent
+            // photos (absolutely positioned against the row, not inline in
+            // the flex flow) — each photo is 92px wide with no gap between
+            // them, so the seam after photo N sits at x = 92*N.
+            draft.imageUrl && draft.imageUrl2 && React.createElement("button", {
+                onClick: () => update({ imageUrl: draft.imageUrl2, imageUrl2: draft.imageUrl }),
+                title: "\u5199\u771F\u306E\u9806\u756A\u3092\u5165\u308C\u66FF\u3048\u308B",
+                style: {
+                    position: "absolute", top: -14, left: 92 - 14,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    width: 28, height: 28, borderRadius: 999, zIndex: 1,
+                    border: `1px solid ${COLORS.line}`, background: "#fff", color: COLORS.inkSoft, cursor: "pointer",
+                    boxShadow: "0 2px 6px rgba(45,42,36,0.12)",
+                },
+            }, React.createElement(Repeat, { size: 13 })),
+            draft.imageUrl2 && draft.imageUrl3 && React.createElement("button", {
+                onClick: () => update({ imageUrl2: draft.imageUrl3, imageUrl3: draft.imageUrl2 }),
+                title: "\u5199\u771F\u306E\u9806\u756A\u3092\u5165\u308C\u66FF\u3048\u308B",
+                style: {
+                    position: "absolute", top: -14, left: 92 * 2 - 14,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    width: 28, height: 28, borderRadius: 999, zIndex: 1,
+                    border: `1px solid ${COLORS.line}`, background: "#fff", color: COLORS.inkSoft, cursor: "pointer",
+                    boxShadow: "0 2px 6px rgba(45,42,36,0.12)",
+                },
+            }, React.createElement(Repeat, { size: 13 }))),
         (pendingPhotoFile || editingExistingPhoto) && React.createElement(LazyPhotoPositionEditor, {
             file: pendingPhotoFile || undefined,
             source: !pendingPhotoFile && editingExistingPhoto ? draft[photoSlot === 3 ? "imageUrl3" : photoSlot === 2 ? "imageUrl2" : "imageUrl"] : undefined,
