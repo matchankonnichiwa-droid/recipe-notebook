@@ -202,28 +202,13 @@ function DateSwapSheet({ startDateStr, mealPlan, recipesById, weekdayNames, onCl
 // side dishes) — used to manually fill an empty slot rather than guessing.
 function SlotPickerSheet({ recipes, pool, onClose, onPick }) {
     const [query, setQuery] = useState("");
-    const [categoryFilter, setCategoryFilter] = useState(null);
-    const inPool = useMemo(() => (pool ? recipes.filter((r) => pool.includes(r.dishCategory)) : recipes), [recipes, pool]);
-    const availableCategories = useMemo(() => {
-        const seen = new Set();
-        const list = [];
-        inPool.forEach((r) => {
-            const cat = r.dishCategory || "その他";
-            if (!seen.has(cat)) {
-                seen.add(cat);
-                list.push(cat);
-            }
-        });
-        return list;
-    }, [inPool]);
     const results = useMemo(() => {
-        let list = categoryFilter ? inPool.filter((r) => (r.dishCategory || "その他") === categoryFilter) : inPool;
-        if (query.trim()) {
-            const q = query.trim().toLowerCase();
-            list = list.filter((r) => (r.title || "").toLowerCase().includes(q));
-        }
-        return list.slice(0, 40);
-    }, [inPool, categoryFilter, query]);
+        const inPool = pool ? recipes.filter((r) => pool.includes(r.dishCategory)) : recipes;
+        if (!query.trim())
+            return inPool.slice(0, 40);
+        const q = query.trim().toLowerCase();
+        return inPool.filter((r) => (r.title || "").toLowerCase().includes(q)).slice(0, 40);
+    }, [recipes, pool, query]);
     return React.createElement("div", { style: { position: "fixed", inset: 0, zIndex: 96 } },
         React.createElement("div", { onClick: onClose, style: { position: "absolute", inset: 0, background: "rgba(32,35,31,0.32)" } }),
         React.createElement("div", { style: {
@@ -239,17 +224,6 @@ function SlotPickerSheet({ recipes, pool, onClose, onPick }) {
                     width: "100%", boxSizing: "border-box", border: `1px solid ${COLORS.line}`, borderRadius: 12,
                     padding: "10px 14px", fontSize: 15, marginBottom: 10, color: COLORS.ink, background: "#fff"
                 } }),
-            availableCategories.length > 1 && React.createElement("div", { style: { display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4, marginBottom: 10, WebkitOverflowScrolling: "touch" } },
-                React.createElement("button", { onClick: () => setCategoryFilter(null), style: {
-                        flexShrink: 0, fontSize: 12, padding: "6px 13px", borderRadius: 999, border: "none",
-                        background: !categoryFilter ? COLORS.accent : COLORS.chipBg, color: !categoryFilter ? "#fff" : COLORS.inkSoft,
-                        fontWeight: 700, whiteSpace: "nowrap", cursor: "pointer",
-                    } }, "\u3059\u3079\u3066"),
-                availableCategories.map((cat) => React.createElement("button", { key: cat, onClick: () => setCategoryFilter(categoryFilter === cat ? null : cat), style: {
-                        flexShrink: 0, fontSize: 12, padding: "6px 13px", borderRadius: 999, border: "none",
-                        background: categoryFilter === cat ? COLORS.accent : COLORS.chipBg, color: categoryFilter === cat ? "#fff" : COLORS.inkSoft,
-                        fontWeight: 700, whiteSpace: "nowrap", cursor: "pointer",
-                    } }, cat))),
             results.length === 0 && React.createElement("p", { style: { fontSize: 13, color: COLORS.inkSoft, padding: "12px 2px" } }, "\u898B\u3064\u304B\u308A\u307E\u305B\u3093\u3067\u3057\u305F"),
             results.map((r) => React.createElement("button", { key: r.id, onClick: () => onPick(r), style: {
                     display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", border: "none",
@@ -261,16 +235,8 @@ function SlotPickerSheet({ recipes, pool, onClose, onPick }) {
                     } }, (r.imageUrl || r.imageUrl2) ? React.createElement("img", { src: r.imageUrl || r.imageUrl2, alt: "", style: { width: "100%", height: "100%", objectFit: "cover" } }) : React.createElement(BookOpen, { size: 16, color: COLORS.inkSoft })),
                 React.createElement("span", { style: { fontSize: 14, fontWeight: 650, color: COLORS.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, r.title || "(無題)")))));
 }
-export function CalendarView({ recipes, mealPlan, onAddEntry, onRemoveEntry, onSetDayEntries, onSelectRecipe, onBack, initialMode, onModeChange }) {
-    const [mode, setModeRaw] = useState(initialMode || "plan"); // "plan" | "edit"
-    // Report mode changes upward so the parent can remember which tab
-    // ("献立をたてる" vs "献立編集") was active — this component gets
-    // unmounted while viewing a recipe's detail page and remounted on
-    // return, which would otherwise silently reset back to "plan".
-    const setMode = (next) => {
-        setModeRaw(next);
-        onModeChange && onModeChange(next);
-    };
+export function CalendarView({ recipes, mealPlan, onAddEntry, onRemoveEntry, onSetDayEntries, onSelectRecipe, onBack }) {
+    const [mode, setMode] = useState("plan"); // "plan" | "edit"
     const [selected, setSelected] = useState(new Set());
     const recipesById = useMemo(() => Object.fromEntries(recipes.map((r) => [r.id, r])), [recipes]);
     const todayObj = useMemo(() => { const t = new Date(); t.setHours(0, 0, 0, 0); return t; }, []);
