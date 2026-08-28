@@ -1802,6 +1802,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
     const [extracting, setExtracting] = useState(false);
     const [screenshotImageUrl, setScreenshotImageUrl] = useState("");
     const [screenshotImageUrl2, setScreenshotImageUrl2] = useState("");
+    const [screenshotImageUrl3, setScreenshotImageUrl3] = useState("");
     const [urlImportError, setUrlImportError] = useState("");
     const [urlImportNotice, setUrlImportNotice] = useState("");
     useEffect(() => {
@@ -1863,7 +1864,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
             const current = Array.isArray(prev[dateStr]) ? prev[dateStr] : [];
             if (current.some((e) => e.recipeId === recipe.id) || current.length >= MAX_MEALS_PER_DAY)
                 return prev;
-            const entry = { recipeId: recipe.id, title: recipe.title, imageUrl: recipe.imageUrl || recipe.imageUrl2 || "", dishCategory: recipe.dishCategory || null };
+            const entry = { recipeId: recipe.id, title: recipe.title, imageUrl: recipe.imageUrl || recipe.imageUrl2 || recipe.imageUrl3 || "", dishCategory: recipe.dishCategory || null };
             const next = [...current, entry];
             uref(`meal-plan/${dateStr}`).set(next);
             return { ...prev, [dateStr]: next };
@@ -1934,6 +1935,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
         setUrlImportError("");
         setScreenshotImageUrl("");
         setScreenshotImageUrl2("");
+        setScreenshotImageUrl3("");
     };
     // Step 1: user picks screenshots — queue them up for cropping rather than
     // OCR'ing immediately. Letting the person exclude photos/ads/nav bars
@@ -1974,13 +1976,14 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
             setCropQueue([]);
             setCropResults([]);
             // Grab color copies of the first (and, when multiple images were
-            // picked, second) photo — rotated the same way each was in the
-            // crop screen — to offer as the recipe's own photo(s), in case
-            // they're actual photos of the finished dish rather than text
-            // screenshots (the person can remove them in the editor if
-            // not). Done here — once the final rotation is known — rather
-            // than back when the files were first picked, so a photo that
-            // needed rotating comes out right-side-up here too.
+            // picked, second and third) photo — rotated the same way each
+            // was in the crop screen — to offer as the recipe's own
+            // photo(s), in case they're actual photos of the finished dish
+            // rather than text screenshots (the person can remove them in
+            // the editor if not). Done here — once the final rotation is
+            // known — rather than back when the files were first picked,
+            // so a photo that needed rotating comes out right-side-up here
+            // too.
             if (resultsSoFar[0]) {
                 fileToColorDataUrl(resultsSoFar[0].file, 900, resultsSoFar[0].rotation)
                     .then((dataUrl) => setScreenshotImageUrl(dataUrl))
@@ -1993,6 +1996,13 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
                     .then((dataUrl) => setScreenshotImageUrl2(dataUrl))
                     .catch(() => {
                     // non-critical — just skip attaching a second photo
+                });
+            }
+            if (resultsSoFar[2]) {
+                fileToColorDataUrl(resultsSoFar[2].file, 900, resultsSoFar[2].rotation)
+                    .then((dataUrl) => setScreenshotImageUrl3(dataUrl))
+                    .catch(() => {
+                    // non-critical — just skip attaching a third photo
                 });
             }
             runOcrBatch(resultsSoFar);
@@ -2065,17 +2075,21 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
     const cleanupSteps = (steps) => (steps || []).map((s) => s.trim()).filter(Boolean);
     const saveRecipe = async (recipeData) => {
         const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-        // If imageUrl/imageUrl2 came in as a raw base64 data URL (e.g. the
-        // screenshot auto-attached from a photo import), re-compress it down
-        // to the same small target used everywhere else — see
-        // recompressDataUrl for why this matters for keeping the app fast.
+        // If imageUrl/imageUrl2/imageUrl3 came in as a raw base64 data URL
+        // (e.g. the screenshots auto-attached from a photo import),
+        // re-compress them down to the same small target used everywhere
+        // else — see recompressDataUrl for why this matters.
         let imageUrl = recipeData.imageUrl || "";
         let imageUrl2 = recipeData.imageUrl2 || "";
+        let imageUrl3 = recipeData.imageUrl3 || "";
         if (imageUrl.startsWith("data:")) {
             imageUrl = await recompressDataUrl(imageUrl, 600, 0.6).catch(() => imageUrl);
         }
         if (imageUrl2.startsWith("data:")) {
             imageUrl2 = await recompressDataUrl(imageUrl2, 600, 0.6).catch(() => imageUrl2);
+        }
+        if (imageUrl3.startsWith("data:")) {
+            imageUrl3 = await recompressDataUrl(imageUrl3, 600, 0.6).catch(() => imageUrl3);
         }
         const newRecipe = {
             ...recipeData,
@@ -2083,6 +2097,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
             id,
             imageUrl,
             imageUrl2,
+            imageUrl3,
             savedAt: new Date().toISOString(),
         };
         await writeRecipe(newRecipe);
@@ -2141,6 +2156,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
                     sourceType: detectSource(inputUrl),
                     imageUrl: screenshotImageUrl || "",
                     imageUrl2: screenshotImageUrl2 || "",
+                    imageUrl3: screenshotImageUrl3 || "",
                 };
                 savedRecipes.push(await saveRecipe(recipeData));
             }
@@ -2882,7 +2898,7 @@ function RecipeGridCard({ recipe, onClick }) {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-            } }, (recipe.imageUrl || recipe.imageUrl2) ? (React.createElement("img", { src: recipe.imageUrl || recipe.imageUrl2, alt: "", onError: (e) => {
+            } }, (recipe.imageUrl || recipe.imageUrl2 || recipe.imageUrl3) ? (React.createElement("img", { src: recipe.imageUrl || recipe.imageUrl2 || recipe.imageUrl3, alt: "", onError: (e) => {
                 e.target.style.display = "none";
             }, style: { width: "100%", height: "100%", objectFit: "cover" } })) : (React.createElement("span", { style: { fontSize: 11, color: COLORS.inkSoft, opacity: 0.6 } }, "No Photo"))),
         React.createElement("div", { style: { padding: "12px 13px 14px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 6 } },
@@ -2918,7 +2934,7 @@ function RecipeListCard({ recipe, onClick }) {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-            } }, (recipe.imageUrl || recipe.imageUrl2) ? (React.createElement("img", { src: recipe.imageUrl || recipe.imageUrl2, alt: "", onError: (e) => {
+            } }, (recipe.imageUrl || recipe.imageUrl2 || recipe.imageUrl3) ? (React.createElement("img", { src: recipe.imageUrl || recipe.imageUrl2 || recipe.imageUrl3, alt: "", onError: (e) => {
                 e.target.style.display = "none";
             }, style: { width: "100%", height: "100%", objectFit: "cover" } })) : (React.createElement("span", { style: { fontSize: 9.5, color: COLORS.inkSoft, opacity: 0.6 } }, "No Photo"))),
         React.createElement("div", { style: { flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "10px 14px" } },
@@ -3027,7 +3043,7 @@ function AddView({ inputUrl, setInputUrl, inputText, setInputText, extractError,
     const cameraPickerRef = useRef(null);
     useEffect(() => {
         if (addMode === "manual" && !draft) {
-            setDraft({ title: "", servings: "", ingredients: [], steps: [], tags: [], memo: "", dishCategory: "その他", meatType: null, noodleType: null, vegType: null, soupType: null, appliance: null, sourceUrl: "", sourceType: "other", imageUrl: "", imageUrl2: "" });
+            setDraft({ title: "", servings: "", ingredients: [], steps: [], tags: [], memo: "", dishCategory: "その他", meatType: null, noodleType: null, vegType: null, soupType: null, appliance: null, sourceUrl: "", sourceType: "other", imageUrl: "", imageUrl2: "", imageUrl3: "" });
         } else if (addMode === "image") {
             setTimeout(() => imagePickerRef.current && imagePickerRef.current.click(), 80);
         } else if (addMode === "camera") {
@@ -3259,7 +3275,7 @@ function DraftEditor({ draft, setDraft, onSave, onDiscard, saveError, mode = "cr
     const [categoryManual, setCategoryManual] = useState(false);
     const [pendingPhotoFile, setPendingPhotoFile] = useState(null);
     const [editingExistingPhoto, setEditingExistingPhoto] = useState(false);
-    const [photoSlot, setPhotoSlot] = useState(1); // 1 | 2 — which of the two photo slots is being added/edited
+    const [photoSlot, setPhotoSlot] = useState(1); // 1 | 2 | 3 — which photo slot is being added/edited
     const update = (patch) => setDraft({ ...draft, ...patch });
     const updateTitle = (value) => {
         if (categoryManual) {
@@ -3362,13 +3378,26 @@ function DraftEditor({ draft, setDraft, onSave, onDiscard, saveError, mode = "cr
             )),
         React.createElement("label", { style: fieldLabelStyle }, "\u6599\u7406\u540D"),
         React.createElement("input", { value: draft.title, onChange: (e) => updateTitle(e.target.value), style: inputStyle }),
-        React.createElement("label", { style: fieldLabelStyle }, "\u5199\u771F\uFF08\u6700\u59272\u679A\uFF09"),
-        React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 16 } },
-            [1, 2].map((slot) => {
-                const field = slot === 1 ? "imageUrl" : "imageUrl2";
+        React.createElement("label", { style: fieldLabelStyle }, "\u5199\u771F\uFF08\u6700\u59273\u679A\uFF09"),
+        React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 6, marginBottom: 16 } },
+            [1, 2, 3].map((slot) => {
+                const field = slot === 1 ? "imageUrl" : slot === 2 ? "imageUrl2" : "imageUrl3";
+                const prevField = slot === 2 ? "imageUrl" : slot === 3 ? "imageUrl2" : null;
                 const url = draft[field];
+                const prevUrl = prevField ? draft[prevField] : null;
                 return React.createElement(React.Fragment, { key: slot },
-                    url ? React.createElement("div", { style: { position: "relative", width: 96, height: 96, flexShrink: 0 } },
+                    // Swap arrow sits between this slot and the previous one,
+                    // only shown once both have a photo to swap.
+                    prevField && prevUrl && url && React.createElement("button", {
+                        onClick: () => update({ [prevField]: url, [field]: prevUrl }),
+                        title: "\u5199\u771F\u306E\u9806\u756A\u3092\u5165\u308C\u66FF\u3048\u308B",
+                        style: {
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            width: 28, height: 28, borderRadius: 999, flexShrink: 0,
+                            border: `1px solid ${COLORS.line}`, background: "#fff", color: COLORS.inkSoft, cursor: "pointer",
+                        },
+                    }, React.createElement(Shuffle, { size: 13 })),
+                    url ? React.createElement("div", { style: { position: "relative", width: 92, height: 92, flexShrink: 0 } },
                         React.createElement("img", { src: url, alt: "", onClick: () => { setPhotoSlot(slot); setEditingExistingPhoto(true); }, onError: (e) => {
                                 e.target.style.display = "none";
                             }, style: {
@@ -3399,8 +3428,8 @@ function DraftEditor({ draft, setDraft, onSave, onDiscard, saveError, mode = "cr
                             }, "aria-label": "\u5199\u771F\u3092\u524A\u9664" },
                             React.createElement(X, { size: 13, color: "#fff" })))
                         : React.createElement("label", { style: {
-                                width: 96,
-                                height: 96,
+                                width: 92,
+                                height: 92,
                                 flexShrink: 0,
                                 borderRadius: 12,
                                 border: `1.5px dashed ${COLORS.accent}`,
@@ -3418,21 +3447,12 @@ function DraftEditor({ draft, setDraft, onSave, onDiscard, saveError, mode = "cr
                                     setPhotoSlot(slot);
                                     setPendingPhotoFile(file);
                                 } })));
-            }),
-            draft.imageUrl && draft.imageUrl2 && React.createElement("button", {
-                onClick: () => update({ imageUrl: draft.imageUrl2, imageUrl2: draft.imageUrl }),
-                title: "\u5199\u771F\u306E\u9806\u756A\u3092\u5165\u308C\u66FF\u3048\u308B",
-                style: {
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    width: 36, height: 36, borderRadius: 999, flexShrink: 0,
-                    border: `1px solid ${COLORS.line}`, background: "#fff", color: COLORS.inkSoft, cursor: "pointer",
-                },
-            }, React.createElement(Shuffle, { size: 15 }))),
+            })),
         (pendingPhotoFile || editingExistingPhoto) && React.createElement(LazyPhotoPositionEditor, {
             file: pendingPhotoFile || undefined,
-            source: !pendingPhotoFile && editingExistingPhoto ? draft[photoSlot === 2 ? "imageUrl2" : "imageUrl"] : undefined,
+            source: !pendingPhotoFile && editingExistingPhoto ? draft[photoSlot === 3 ? "imageUrl3" : photoSlot === 2 ? "imageUrl2" : "imageUrl"] : undefined,
             onCancel: () => { setPendingPhotoFile(null); setEditingExistingPhoto(false); },
-            onConfirm: (dataUrl) => { update({ [photoSlot === 2 ? "imageUrl2" : "imageUrl"]: dataUrl }); setPendingPhotoFile(null); setEditingExistingPhoto(false); },
+            onConfirm: (dataUrl) => { update({ [photoSlot === 3 ? "imageUrl3" : photoSlot === 2 ? "imageUrl2" : "imageUrl"]: dataUrl }); setPendingPhotoFile(null); setEditingExistingPhoto(false); },
         }),
         React.createElement("label", { style: fieldLabelStyle }, "\u4EBA\u6570\uFF08\u4F55\u4EBA\u5206\u306E\u5206\u91CF\u304B\u3092\u8A18\u9332\u3057\u307E\u3059\uFF09"),
         React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 14 } },
@@ -3619,7 +3639,7 @@ function DetailView({ recipe, onAddToShoppingList }) {
         setTimeout(() => setAddedToList(false), 2000);
     };
     return (React.createElement("div", null,
-        (recipe.imageUrl || recipe.imageUrl2) && (React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 18 } },
+        (recipe.imageUrl || recipe.imageUrl2 || recipe.imageUrl3) && (React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 18 } },
             recipe.imageUrl && React.createElement("img", { src: recipe.imageUrl, alt: "", onError: (e) => {
                     e.target.style.display = "none";
                 }, style: {
@@ -3633,6 +3653,18 @@ function DetailView({ recipe, onAddToShoppingList }) {
                     boxShadow: "0 8px 24px rgba(46,42,36,0.08)",
                 } }),
             recipe.imageUrl2 && React.createElement("img", { src: recipe.imageUrl2, alt: "", onError: (e) => {
+                    e.target.style.display = "none";
+                }, style: {
+                    flex: 1,
+                    minWidth: 0,
+                    width: "100%",
+                    height: 260,
+                    objectFit: "cover",
+                    borderRadius: 20,
+                    border: `1px solid ${COLORS.line}`,
+                    boxShadow: "0 8px 24px rgba(46,42,36,0.08)",
+                } }),
+            recipe.imageUrl3 && React.createElement("img", { src: recipe.imageUrl3, alt: "", onError: (e) => {
                     e.target.style.display = "none";
                 }, style: {
                     flex: 1,
@@ -4265,7 +4297,7 @@ function App() {
             alert(`写真の整理を開始できませんでした：${e?.message || e}`);
             return;
         }
-        const targets = all.filter((r) => (r.imageUrl || "").startsWith("data:") || (r.imageUrl2 || "").startsWith("data:"));
+        const targets = all.filter((r) => (r.imageUrl || "").startsWith("data:") || (r.imageUrl2 || "").startsWith("data:") || (r.imageUrl3 || "").startsWith("data:"));
         if (targets.length === 0) {
             setPhotoMigrationStatus("done");
             return;
@@ -4281,6 +4313,9 @@ function App() {
                 }
                 if ((r.imageUrl2 || "").startsWith("data:")) {
                     patch.imageUrl2 = await recompressDataUrl(r.imageUrl2, 600, 0.6);
+                }
+                if ((r.imageUrl3 || "").startsWith("data:")) {
+                    patch.imageUrl3 = await recompressDataUrl(r.imageUrl3, 600, 0.6);
                 }
                 await uref(`recipes/${r.id}`).update(patch);
             }
