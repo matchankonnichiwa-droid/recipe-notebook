@@ -4146,15 +4146,21 @@ function App() {
         // change even in an edge case we haven't anticipated, rather than
         // silently doing nothing if something above this point breaks.
         setPhotoMigrationStatus({ done: 0, total: 0 });
-        let targets;
+        let all;
         try {
-            targets = recipes.filter((r) => (r.imageUrl || "").startsWith("data:") || (r.imageUrl2 || "").startsWith("data:"));
+            // This settings panel lives in a different component (App)
+            // than the one holding the live `recipes` state (RecipeNotebook)
+            // — read the current list directly from Firebase instead of
+            // relying on a prop/state value that isn't in scope here.
+            const snap = await uref("recipes").once("value");
+            all = Object.values(snap.val() || {});
         }
         catch (e) {
             setPhotoMigrationStatus(null);
             alert(`写真の整理を開始できませんでした：${e?.message || e}`);
             return;
         }
+        const targets = all.filter((r) => (r.imageUrl || "").startsWith("data:") || (r.imageUrl2 || "").startsWith("data:"));
         if (targets.length === 0) {
             setPhotoMigrationStatus("done");
             return;
@@ -4171,7 +4177,7 @@ function App() {
                 if ((r.imageUrl2 || "").startsWith("data:")) {
                     patch.imageUrl2 = await uploadRecipePhoto(r.imageUrl2, r.id, "imageUrl2");
                 }
-                await writeRecipe({ ...r, ...patch });
+                await uref(`recipes/${r.id}`).update(patch);
             }
             catch (e) {
                 // Leave this one's photo as-is (still works, just heavy) and
