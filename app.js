@@ -235,6 +235,7 @@ const MEAT_ICONS = { 鶏肉: "🐔", 豚肉: "🐖", 牛肉: "🐄", その他: 
 const MEAT_TYPES = ["鶏肉", "豚肉", "牛肉", "ひき肉", "その他"];
 const NOODLE_TYPES = ["うどん", "そば", "ラーメン", "パスタ", "その他"];
 const VEG_TYPES = ["サラダ", "炒め物", "和え物・おひたし", "煮物", "漬け物", "その他"];
+const SOUP_TYPES = ["スープ", "みそ汁", "鍋", "その他"];
 function inferNoodleType(title) {
     const t = title || "";
     if (/うどん/.test(t))
@@ -272,9 +273,19 @@ function inferVegType(title) {
         return "漬け物";
     return "その他";
 }
+function inferSoupType(title) {
+    const t = title || "";
+    if (/みそ汁|味噌汁/.test(t))
+        return "みそ汁";
+    if (/鍋/.test(t))
+        return "鍋";
+    if (/スープ|汁|シチュー/.test(t))
+        return "スープ";
+    return "その他";
+}
 function inferDishCategory(title, ingredients) {
     const t = title || "";
-    const base = { meatType: null, noodleType: null, vegType: null };
+    const base = { meatType: null, noodleType: null, vegType: null, soupType: null };
     if (/麺|パスタ|うどん|そば|ラーメン|焼きそば/.test(t)) {
         return { ...base, dishCategory: "麺類", noodleType: inferNoodleType(t) };
     }
@@ -283,7 +294,7 @@ function inferDishCategory(title, ingredients) {
     if (/ご飯|ごはん|丼|オムライス|チャーハン|カレー|寿司|リゾット|おにぎり/.test(t))
         return { ...base, dishCategory: "ご飯もの" };
     if (/スープ|汁|鍋|シチュー/.test(t))
-        return { ...base, dishCategory: "スープ・鍋" };
+        return { ...base, dishCategory: "スープ・鍋", soupType: inferSoupType(t) };
     if (/ケーキ|クッキー|スイーツ|デザート|プリン|アイス|タルト|マフィン/.test(t))
         return { ...base, dishCategory: "デザート" };
     const names = (ingredients || []).map((i) => i.name || "").join(" ");
@@ -378,10 +389,16 @@ function resolveClassification(structured, classifyText, ingredients, applianceT
         vegType = titleVeg !== "その他" ? titleVeg
             : (usedClaude && VEG_TYPES.includes(structured?.vegType) ? structured.vegType : titleVeg);
     }
+    let soupType = null;
+    if (dishCategory === "スープ・鍋") {
+        const titleSoup = inferSoupType(title);
+        soupType = titleSoup !== "その他" ? titleSoup
+            : (usedClaude && SOUP_TYPES.includes(structured?.soupType) ? structured.soupType : titleSoup);
+    }
     const appliance = usedClaude
         ? (APPLIANCES.includes(structured?.appliance) ? structured.appliance : null)
         : inferAppliance(applianceText);
-    return { dishCategory, meatType, noodleType, vegType, appliance };
+    return { dishCategory, meatType, noodleType, vegType, soupType, appliance };
 }
 const CIRCLED_DIGITS = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳";
 const BULLET_CHARS = ["●", "・", "-", "*", "■", "◆", "〇", "○", "◎", "▽", "▼", "▲", "▶", "□", "☆"];
@@ -804,6 +821,7 @@ function parseCaptionHeuristic(rawText) {
         meatType: inferred.meatType,
         noodleType: inferred.noodleType,
         vegType: inferred.vegType,
+                        soupType: inferred.soupType,
     };
 }
 // Computes Otsu's threshold: the gray-level that best splits a bimodal
@@ -914,17 +932,28 @@ function loadAndPreprocessImage(file, rect, rotationDeg) {
 // Loads a File into a small, color, compressed JPEG data URI — used to
 // save the person's screenshot as the recipe's photo (separate from the
 // grayscale/binarized version used for OCR, which would look wrong as a
-// dish photo).
-function fileToColorDataUrl(file, maxDimension) {
+// dish photo). rotationDeg (0/90/180/270, clockwise) applies the same
+// rotation chosen for that image in the crop screen, so a sideways or
+// upside-down photo comes out right-side-up here too rather than only in
+// the OCR pass.
+function fileToColorDataUrl(file, maxDimension, rotationDeg) {
     return new Promise((resolve, reject) => {
         const img = new Image();
         img.onload = () => {
             const scale = Math.min(1, maxDimension / Math.max(img.naturalWidth, img.naturalHeight));
+            const outW = Math.max(1, Math.round(img.naturalWidth * scale));
+            const outH = Math.max(1, Math.round(img.naturalHeight * scale));
+            const rotation = ((rotationDeg || 0) % 360 + 360) % 360;
+            const swapped = rotation === 90 || rotation === 270;
             const canvas = document.createElement("canvas");
-            canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
-            canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+            canvas.width = swapped ? outH : outW;
+            canvas.height = swapped ? outW : outH;
             const ctx = canvas.getContext("2d");
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            ctx.save();
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.rotate((rotation * Math.PI) / 180);
+            ctx.drawImage(img, -outW / 2, -outH / 2, outW, outH);
+            ctx.restore();
             resolve(canvas.toDataURL("image/jpeg", 0.8));
         };
         img.onerror = reject;
@@ -974,6 +1003,7 @@ async function extractWithClaude(pageText, apiKey) {
       "meatType": "dishCategoryが肉料理の場合のみ、鶏肉 / 豚肉 / 牛肉 / ひき肉 / その他 のいずれか(挽き肉・合いびき肉など特定の動物名がない場合はひき肉)。それ以外はnull",
       "noodleType": "dishCategoryが麺類の場合のみ、うどん / そば / ラーメン / パスタ / その他 のいずれか。それ以外はnull",
       "vegType": "dishCategoryが野菜料理の場合のみ、サラダ / 炒め物 / 和え物・おひたし / 煮物 / 漬け物 / その他 のいずれか。それ以外はnull",
+      "soupType": "dishCategoryがスープ・鍋の場合のみ、スープ / みそ汁 / 鍋 / その他 のいずれか。それ以外はnull",
       "appliance": "本文の手順の中で実際に使われている調理器具が次のいずれかに該当する場合は、必ずそれを選んでください: エアフライヤー / ホットクック / オーブン / 炊飯器 / 圧力鍋 / 電子レンジ。「オーブンで250度で20分」「電子レンジ600Wで2分」のように具体的に書かれていれば、それだけで該当する家電を選んでよい根拠になります。フライパン・鍋・トースターなど上記に無い器具の場合や、器具がまったく本文に出てこない場合のみnullにしてください"
     }
   ]
@@ -1755,6 +1785,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
     const [meatTypeFilter, setMeatTypeFilter] = useState(null);
     const [noodleTypeFilter, setNoodleTypeFilter] = useState(null);
     const [vegTypeFilter, setVegTypeFilter] = useState(null);
+    const [soupTypeFilter, setSoupTypeFilter] = useState(null);
     const [applianceFilter, setApplianceFilter] = useState(null);
     const [inputUrl, setInputUrl] = useState("");
     const [inputText, setInputText] = useState("");
@@ -1770,6 +1801,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
     const [urlImporting, setUrlImporting] = useState(false);
     const [extracting, setExtracting] = useState(false);
     const [screenshotImageUrl, setScreenshotImageUrl] = useState("");
+    const [screenshotImageUrl2, setScreenshotImageUrl2] = useState("");
     const [urlImportError, setUrlImportError] = useState("");
     const [urlImportNotice, setUrlImportNotice] = useState("");
     useEffect(() => {
@@ -1901,26 +1933,30 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
         setOcrProgress("");
         setUrlImportError("");
         setScreenshotImageUrl("");
+        setScreenshotImageUrl2("");
     };
     // Step 1: user picks screenshots — queue them up for cropping rather than
     // OCR'ing immediately. Letting the person exclude photos/ads/nav bars
     // before OCR runs is the single biggest accuracy win we've found.
+    // If a crop session is already in progress (cropQueue/cropResults
+    // non-empty), append rather than replace — this is what lets someone
+    // build up a multi-photo set via repeated single-shot camera captures,
+    // since iOS only ever hands back one photo per "Take Photo" tap.
     const handleScreenshots = (fileList) => {
         const files = Array.from(fileList || []);
         if (files.length === 0)
             return;
         setOcrError("");
-        setCropResults([]);
-        setCropIndex(0);
-        setCropQueue(files.map((file) => ({ file, url: URL.createObjectURL(file) })));
-        // Grab a color copy of the first screenshot to offer as the recipe's
-        // photo, in case it's an actual photo of the finished dish rather than
-        // a text screenshot (the person can remove it in the editor if not).
-        fileToColorDataUrl(files[0], 900)
-            .then((dataUrl) => setScreenshotImageUrl(dataUrl))
-            .catch(() => {
-            // non-critical — just skip attaching a photo
-        });
+        const inProgress = cropQueue.length > 0 || cropResults.length > 0;
+        const newItems = files.map((file) => ({ file, url: URL.createObjectURL(file) }));
+        if (inProgress) {
+            setCropQueue((prev) => [...prev, ...newItems]);
+        }
+        else {
+            setCropResults([]);
+            setCropIndex(0);
+            setCropQueue(newItems);
+        }
     };
     const handleCropConfirm = (rect, rotation) => {
         const entry = { file: cropQueue[cropIndex].file, rect, rotation: rotation || 0 };
@@ -1937,6 +1973,28 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
         else {
             setCropQueue([]);
             setCropResults([]);
+            // Grab color copies of the first (and, when multiple images were
+            // picked, second) photo — rotated the same way each was in the
+            // crop screen — to offer as the recipe's own photo(s), in case
+            // they're actual photos of the finished dish rather than text
+            // screenshots (the person can remove them in the editor if
+            // not). Done here — once the final rotation is known — rather
+            // than back when the files were first picked, so a photo that
+            // needed rotating comes out right-side-up here too.
+            if (resultsSoFar[0]) {
+                fileToColorDataUrl(resultsSoFar[0].file, 900, resultsSoFar[0].rotation)
+                    .then((dataUrl) => setScreenshotImageUrl(dataUrl))
+                    .catch(() => {
+                    // non-critical — just skip attaching a photo
+                });
+            }
+            if (resultsSoFar[1]) {
+                fileToColorDataUrl(resultsSoFar[1].file, 900, resultsSoFar[1].rotation)
+                    .then((dataUrl) => setScreenshotImageUrl2(dataUrl))
+                    .catch(() => {
+                    // non-critical — just skip attaching a second photo
+                });
+            }
             runOcrBatch(resultsSoFar);
         }
     };
@@ -2060,6 +2118,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
                             meatType: inferred.meatType,
                             noodleType: inferred.noodleType,
                             vegType: inferred.vegType,
+                        soupType: inferred.soupType,
                             appliance: inferred.appliance,
                         };
                     });
@@ -2081,6 +2140,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
                     sourceUrl: inputUrl.trim(),
                     sourceType: detectSource(inputUrl),
                     imageUrl: screenshotImageUrl || "",
+                    imageUrl2: screenshotImageUrl2 || "",
                 };
                 savedRecipes.push(await saveRecipe(recipeData));
             }
@@ -2088,6 +2148,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
             if (savedRecipes.length === 1) {
                 setSelectedId(savedRecipes[0].id);
                 setView("detail");
+                setConfirmDelete(false);
             }
             else {
                 setView("list");
@@ -2152,6 +2213,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
                     meatType: inferred.meatType,
                     noodleType: inferred.noodleType,
                     vegType: inferred.vegType,
+                        soupType: inferred.soupType,
                     appliance: inferred.appliance,
                     sourceUrl: url,
                     sourceType: detectSource(url),
@@ -2164,6 +2226,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
             if (savedRecipes.length === 1 && !onlyRecipeIsEmpty) {
                 setSelectedId(savedRecipes[0].id);
                 setView("detail");
+                setConfirmDelete(false);
             }
             else if (onlyRecipeIsEmpty) {
                 // Instagram in particular often blocks the fetch from seeing
@@ -2214,6 +2277,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
         await writeRecipe(cleaned);
         setEditDraft(null);
         setView("detail");
+        setConfirmDelete(false);
     };
     const [favoriteOnly, setFavoriteOnly] = useState(false);
     const [viewMode, setViewMode] = useState(() => {
@@ -2250,6 +2314,9 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
         if (categoryFilter === "野菜料理" && vegTypeFilter) {
             list = list.filter((r) => (r.vegType || "その他") === vegTypeFilter);
         }
+        if (categoryFilter === "スープ・鍋" && soupTypeFilter) {
+            list = list.filter((r) => (r.soupType || "その他") === soupTypeFilter);
+        }
         if (applianceFilter) {
             list = list.filter((r) => r.appliance === applianceFilter);
         }
@@ -2270,7 +2337,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
                 .toLowerCase();
             return hay.includes(q);
         });
-    }, [recipes, query, categoryFilter, meatTypeFilter, noodleTypeFilter, vegTypeFilter, applianceFilter, favoriteOnly]);
+    }, [recipes, query, categoryFilter, meatTypeFilter, noodleTypeFilter, vegTypeFilter, soupTypeFilter, applianceFilter, favoriteOnly]);
     const availableCategories = categoryOrder || DISH_CATEGORIES;
     const availableAppliances = applianceOrder || APPLIANCES;
     const selected = recipes.find((r) => r.id === selectedId);
@@ -2283,7 +2350,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
             justifyContent: "center",
             padding: "0",
         } },
-        cropQueue.length > 0 && (React.createElement(LazyCropOverlay, { src: cropQueue[cropIndex].url, index: cropIndex, total: cropQueue.length, onConfirm: handleCropConfirm, onUseFull: (rotation) => handleCropConfirm(null, rotation), onSkip: handleCropSkip })),
+        cropQueue.length > 0 && (React.createElement(LazyCropOverlay, { src: cropQueue[cropIndex].url, index: cropIndex, total: cropQueue.length, onConfirm: handleCropConfirm, onUseFull: (rotation) => handleCropConfirm(null, rotation), onSkip: handleCropSkip, onAddMore: handleScreenshots })),
         React.createElement("div", { style: {
                 width: "100%",
                 maxWidth: 520,
@@ -2314,7 +2381,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
             !loaded && (React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, color: COLORS.inkSoft, padding: 24 } },
                 React.createElement(Loader2, { size: 18, className: "spin" }),
                 React.createElement("span", null, "\u8AAD\u307F\u8FBC\u307F\u4E2D..."))),
-            loaded && view === "list" && (React.createElement(ListView, { recipes: filtered, total: recipes.length, query: query, setQuery: setQuery, categoryFilter: categoryFilter, setCategoryFilter: setCategoryFilter, meatTypeFilter: meatTypeFilter, setMeatTypeFilter: setMeatTypeFilter, noodleTypeFilter: noodleTypeFilter, setNoodleTypeFilter: setNoodleTypeFilter, vegTypeFilter: vegTypeFilter, setVegTypeFilter: setVegTypeFilter, availableCategories: availableCategories, applianceFilter: applianceFilter, setApplianceFilter: setApplianceFilter, availableAppliances: availableAppliances, favoriteOnly: favoriteOnly, setFavoriteOnly: setFavoriteOnly, viewMode: viewMode, setViewMode: changeViewMode, onAdd: (mode = "url") => { setAddMode(mode); setView("add"); }, onSelect: (id) => { setSelectedId(id); setView("detail"); setConfirmDelete(false); }, onDeleteRecipe: handleDelete, notice: urlImportNotice, onDismissNotice: () => setUrlImportNotice("") })),
+            loaded && view === "list" && (React.createElement(ListView, { recipes: filtered, total: recipes.length, query: query, setQuery: setQuery, categoryFilter: categoryFilter, setCategoryFilter: setCategoryFilter, meatTypeFilter: meatTypeFilter, setMeatTypeFilter: setMeatTypeFilter, noodleTypeFilter: noodleTypeFilter, setNoodleTypeFilter: setNoodleTypeFilter, vegTypeFilter: vegTypeFilter, setVegTypeFilter: setVegTypeFilter, soupTypeFilter: soupTypeFilter, setSoupTypeFilter: setSoupTypeFilter, availableCategories: availableCategories, applianceFilter: applianceFilter, setApplianceFilter: setApplianceFilter, availableAppliances: availableAppliances, favoriteOnly: favoriteOnly, setFavoriteOnly: setFavoriteOnly, viewMode: viewMode, setViewMode: changeViewMode, onAdd: (mode = "url") => { setAddMode(mode); setView("add"); }, onSelect: (id) => { setSelectedId(id); setView("detail"); setConfirmDelete(false); }, onDeleteRecipe: handleDelete, notice: urlImportNotice, onDismissNotice: () => setUrlImportNotice("") })),
             loaded && view === "calendar" && (React.createElement(LazyCalendarView, { recipes: recipes, mealPlan: mealPlan, onAddEntry: addMealPlanEntry, onRemoveEntry: removeMealPlanEntry, onSetDayEntries: setMealPlanEntries, onBack: () => setView("list"), onSelectRecipe: (id) => { setSelectedId(id); setDetailOrigin("calendar"); setView("detail"); setConfirmDelete(false); }, initialMode: calendarMode, onModeChange: setCalendarMode })),
             loaded && view === "add" && (React.createElement(AddView, { inputUrl: inputUrl, setInputUrl: setInputUrl, inputText: inputText, setInputText: setInputText, extractError: extractError, onExtract: handleExtract, extracting: extracting, draft: draft, setDraft: setDraft, onSave: handleSaveDraft, onDiscard: () => setDraft(null), saveError: saveError, ocrRunning: ocrRunning, ocrProgress: ocrProgress, ocrError: ocrError, onScreenshots: handleScreenshots, urlImporting: urlImporting, urlImportError: urlImportError, onUrlImport: handleUrlImport, apiKey: apiKey, addMode: addMode, categoryOrder: categoryOrder, applianceOrder: applianceOrder })),
             loaded && view === "detail" && selected && (React.createElement(DetailView, { recipe: selected, onAddToShoppingList: addToShoppingList })),
@@ -2402,7 +2469,7 @@ function groupByDishCategory(recipes) {
         return { cat, subGroups: null, items };
     });
 }
-function ListView({ recipes, total, query, setQuery, categoryFilter, setCategoryFilter, meatTypeFilter, setMeatTypeFilter, noodleTypeFilter, setNoodleTypeFilter, vegTypeFilter, setVegTypeFilter, availableCategories, applianceFilter, setApplianceFilter, availableAppliances, favoriteOnly, setFavoriteOnly, viewMode, setViewMode, onAdd, onSelect, onDeleteRecipe, notice, onDismissNotice, }) {
+function ListView({ recipes, total, query, setQuery, categoryFilter, setCategoryFilter, meatTypeFilter, setMeatTypeFilter, noodleTypeFilter, setNoodleTypeFilter, vegTypeFilter, setVegTypeFilter, soupTypeFilter, setSoupTypeFilter, availableCategories, applianceFilter, setApplianceFilter, availableAppliances, favoriteOnly, setFavoriteOnly, viewMode, setViewMode, onAdd, onSelect, onDeleteRecipe, notice, onDismissNotice, }) {
     useEffect(() => {
         if (!notice)
             return;
@@ -2653,6 +2720,37 @@ function ListView({ recipes, total, query, setQuery, categoryFilter, setCategory
                     fontWeight: 700,
                     whiteSpace: "nowrap",
                 } }, vt))))),
+        categoryFilter === "スープ・鍋" && (React.createElement("div", { style: {
+                display: "flex",
+                gap: 8,
+                overflowX: "auto",
+                paddingBottom: 4,
+                marginBottom: 16,
+                marginTop: -8,
+                WebkitOverflowScrolling: "touch",
+            } },
+            React.createElement("button", { onClick: () => setSoupTypeFilter(null), style: {
+                    flexShrink: 0,
+                    fontSize: 11.5,
+                    padding: "6px 13px",
+                    borderRadius: 999,
+                    border: `1px solid ${!soupTypeFilter ? COLORS.sage : COLORS.line}`,
+                    background: !soupTypeFilter ? COLORS.sageSoft : "transparent",
+                    color: !soupTypeFilter ? COLORS.sage : COLORS.inkSoft,
+                    fontWeight: 700,
+                    whiteSpace: "nowrap",
+                } }, "\u3059\u3079\u3066\u306E\u30B9\u30FC\u30D7\u30FB\u9505"),
+            SOUP_TYPES.map((st) => (React.createElement("button", { key: st, onClick: () => setSoupTypeFilter(soupTypeFilter === st ? null : st), style: {
+                    flexShrink: 0,
+                    fontSize: 11.5,
+                    padding: "6px 13px",
+                    borderRadius: 999,
+                    border: `1px solid ${soupTypeFilter === st ? COLORS.sage : COLORS.line}`,
+                    background: soupTypeFilter === st ? COLORS.sageSoft : "transparent",
+                    color: soupTypeFilter === st ? COLORS.sage : COLORS.inkSoft,
+                    fontWeight: 700,
+                    whiteSpace: "nowrap",
+                } }, st))))),
         total === 0 ? (React.createElement(EmptyState, { onAdd: onAdd })) : recipes.length === 0 ? (React.createElement("p", { style: { color: COLORS.inkSoft, fontSize: 14, padding: "20px 4px" } }, query.trim() && categoryFilter
             ? `「${categoryFilter}」の中に「${query}」に一致するレシピが見つかりませんでした。`
             : query.trim()
@@ -2929,7 +3027,7 @@ function AddView({ inputUrl, setInputUrl, inputText, setInputText, extractError,
     const cameraPickerRef = useRef(null);
     useEffect(() => {
         if (addMode === "manual" && !draft) {
-            setDraft({ title: "", servings: "", ingredients: [], steps: [], tags: [], memo: "", dishCategory: "その他", meatType: null, noodleType: null, vegType: null, appliance: null, sourceUrl: "", sourceType: "other", imageUrl: "", imageUrl2: "" });
+            setDraft({ title: "", servings: "", ingredients: [], steps: [], tags: [], memo: "", dishCategory: "その他", meatType: null, noodleType: null, vegType: null, soupType: null, appliance: null, sourceUrl: "", sourceType: "other", imageUrl: "", imageUrl2: "" });
         } else if (addMode === "image") {
             setTimeout(() => imagePickerRef.current && imagePickerRef.current.click(), 80);
         } else if (addMode === "camera") {
@@ -2954,7 +3052,7 @@ function AddView({ inputUrl, setInputUrl, inputText, setInputText, extractError,
             React.createElement("div", { style: { fontSize: 11.5, lineHeight: 1.55, color: COLORS.inkSoft, marginTop: 4 } },
                 addMode === "url" ? "レシピページのURLを貼り付けると、内容を自動で読み取ります。" :
                 addMode === "text" ? "SNSのキャプションやメモをそのまま貼り付けてOK。" :
-                "読み取った内容は、保存する前に確認・編集できます。")
+                "読み取った内容はそのまま保存されます。保存後に内容を直せます。")
         ),
         React.createElement("input", { ref: imagePickerRef, type: "file", accept: "image/*", multiple: true, onChange: (e) => { onScreenshots(e.target.files); e.target.value = ""; }, style: { display: "none" } }),
         React.createElement("input", { ref: cameraPickerRef, type: "file", accept: "image/*", capture: "environment", onChange: (e) => { onScreenshots(e.target.files); e.target.value = ""; }, style: { display: "none" } }),
@@ -3169,7 +3267,7 @@ function DraftEditor({ draft, setDraft, onSave, onDiscard, saveError, mode = "cr
         }
         else {
             const inferred = inferDishCategory(value, draft.ingredients);
-            update({ title: value, dishCategory: inferred.dishCategory, meatType: inferred.meatType, noodleType: inferred.noodleType, vegType: inferred.vegType });
+            update({ title: value, dishCategory: inferred.dishCategory, meatType: inferred.meatType, noodleType: inferred.noodleType, vegType: inferred.vegType, soupType: inferred.soupType });
         }
     };
     const updateDishCategory = (value) => {
@@ -3179,6 +3277,7 @@ function DraftEditor({ draft, setDraft, onSave, onDiscard, saveError, mode = "cr
             meatType: value === "肉料理" ? draft.meatType || "その他" : null,
             noodleType: value === "麺類" ? draft.noodleType || "その他" : null,
             vegType: value === "野菜料理" ? draft.vegType || "その他" : null,
+            soupType: value === "スープ・鍋" ? draft.soupType || "その他" : null,
         });
     };
     const updateMeatType = (value) => {
@@ -3192,6 +3291,10 @@ function DraftEditor({ draft, setDraft, onSave, onDiscard, saveError, mode = "cr
     const updateVegType = (value) => {
         setCategoryManual(true);
         update({ vegType: value });
+    };
+    const updateSoupType = (value) => {
+        setCategoryManual(true);
+        update({ soupType: value });
     };
     // Changing the servings count rescales every ingredient amount from the
     // current base, then that new count becomes the base for next time.
@@ -3315,7 +3418,16 @@ function DraftEditor({ draft, setDraft, onSave, onDiscard, saveError, mode = "cr
                                     setPhotoSlot(slot);
                                     setPendingPhotoFile(file);
                                 } })));
-            })),
+            }),
+            draft.imageUrl && draft.imageUrl2 && React.createElement("button", {
+                onClick: () => update({ imageUrl: draft.imageUrl2, imageUrl2: draft.imageUrl }),
+                title: "\u5199\u771F\u306E\u9806\u756A\u3092\u5165\u308C\u66FF\u3048\u308B",
+                style: {
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    width: 36, height: 36, borderRadius: 999, flexShrink: 0,
+                    border: `1px solid ${COLORS.line}`, background: "#fff", color: COLORS.inkSoft, cursor: "pointer",
+                },
+            }, React.createElement(RotateCcw, { size: 15 }))),
         (pendingPhotoFile || editingExistingPhoto) && React.createElement(LazyPhotoPositionEditor, {
             file: pendingPhotoFile || undefined,
             source: !pendingPhotoFile && editingExistingPhoto ? draft[photoSlot === 2 ? "imageUrl2" : "imageUrl"] : undefined,
@@ -3349,6 +3461,7 @@ function DraftEditor({ draft, setDraft, onSave, onDiscard, saveError, mode = "cr
         draft.dishCategory === "肉料理" && (React.createElement("select", { value: draft.meatType || "その他", onChange: (e) => updateMeatType(e.target.value), style: { ...inputStyle, color: COLORS.sage, fontSize: 13 } }, MEAT_TYPES.map((mt) => (React.createElement("option", { key: mt, value: mt }, mt))))),
         draft.dishCategory === "麺類" && (React.createElement("select", { value: draft.noodleType || "その他", onChange: (e) => updateNoodleType(e.target.value), style: { ...inputStyle, color: COLORS.sage, fontSize: 13 } }, NOODLE_TYPES.map((nt) => (React.createElement("option", { key: nt, value: nt }, nt))))),
         draft.dishCategory === "野菜料理" && (React.createElement("select", { value: draft.vegType || "その他", onChange: (e) => updateVegType(e.target.value), style: { ...inputStyle, color: COLORS.sage, fontSize: 13 } }, VEG_TYPES.map((vt) => (React.createElement("option", { key: vt, value: vt }, vt))))),
+        draft.dishCategory === "スープ・鍋" && (React.createElement("select", { value: draft.soupType || "その他", onChange: (e) => updateSoupType(e.target.value), style: { ...inputStyle, color: COLORS.sage, fontSize: 13 } }, SOUP_TYPES.map((st) => (React.createElement("option", { key: st, value: st }, st))))),
         React.createElement("label", { style: fieldLabelStyle }, "\u4F7F\u3063\u305F\u8ABF\u7406\u5BB6\u96FB(\u4EFB\u610F)"),
         React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 } },
             React.createElement("button", { onClick: () => update({ appliance: null }), style: {
@@ -3533,7 +3646,7 @@ function DetailView({ recipe, onAddToShoppingList }) {
                 } }))),
         React.createElement("div", { style: { marginBottom: 4 } },
             React.createElement("h2", { style: { fontFamily: "'Noto Sans JP', sans-serif", fontSize: 25, fontWeight: 800, margin: 0, lineHeight: 1.35, letterSpacing: "-0.025em" } }, recipe.title)),
-        (recipe.dishCategory || recipe.meatType || recipe.noodleType || recipe.vegType || recipe.appliance || (recipe.sourceType && recipe.sourceType !== "other")) && (React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 } },
+        (recipe.dishCategory || recipe.meatType || recipe.noodleType || recipe.vegType || recipe.soupType || recipe.appliance || (recipe.sourceType && recipe.sourceType !== "other")) && (React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 } },
             recipe.sourceType && recipe.sourceType !== "other" && React.createElement("span", { style: {
                     fontSize: 11.5, fontWeight: 700, color: COLORS.sage, background: COLORS.sageSoft,
                     borderRadius: 999, padding: "4px 11px",
@@ -3554,6 +3667,10 @@ function DetailView({ recipe, onAddToShoppingList }) {
                     fontSize: 11.5, fontWeight: 700, color: COLORS.sage, background: COLORS.sageSoft,
                     borderRadius: 999, padding: "4px 11px",
                 } }, recipe.vegType),
+            recipe.soupType && React.createElement("span", { style: {
+                    fontSize: 11.5, fontWeight: 700, color: COLORS.sage, background: COLORS.sageSoft,
+                    borderRadius: 999, padding: "4px 11px",
+                } }, recipe.soupType),
             recipe.appliance && React.createElement("span", { style: {
                     fontSize: 11.5, fontWeight: 700, color: COLORS.mustard, background: "#F5EDE1",
                     borderRadius: 999, padding: "4px 11px",

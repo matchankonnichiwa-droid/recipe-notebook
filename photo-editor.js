@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { FiCheck as Check, FiCrop as Crop, FiRotateCcw as RotateCcw, FiSkipForward as SkipForward } from "react-icons/fi";
+import { FiCheck as Check, FiCrop as Crop, FiRotateCcw as RotateCcw, FiSkipForward as SkipForward, FiPlus as Plus } from "react-icons/fi";
 
 // This chunk is loaded on demand — only when someone is actively cropping
 // or repositioning a photo (screenshot import, or editing a recipe's
@@ -83,6 +83,37 @@ export function PhotoPositionEditor({ file, source, onCancel, onConfirm }) {
         setRect(next);
     };
     const endDrag = () => { dragState.current = null; };
+    // Replaces the working image with a 90°-rotated version and re-centers
+    // the crop rect against its (possibly swapped) dimensions — reusing the
+    // same init logic the initial load effect uses, just applied again.
+    const applyImage = (url) => {
+        setImgUrl(url);
+        const img = new Image();
+        img.onload = () => {
+            const w = img.naturalWidth, h = img.naturalHeight;
+            setNatural({ w, h });
+            const scale = Math.min(DISPLAY_W / w, DISPLAY_H_MAX / h);
+            const dW = Math.round(w * scale), dH = Math.round(h * scale);
+            setDispSize({ w: dW, h: dH });
+            const rw = dW * 0.86, rh = dH * 0.86;
+            setRect({ x: (dW - rw) / 2, y: (dH - rh) / 2, w: rw, h: rh });
+        };
+        img.src = url;
+    };
+    const handleRotate = () => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement("canvas");
+            canvas.width = img.naturalHeight;
+            canvas.height = img.naturalWidth;
+            const ctx = canvas.getContext("2d");
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.rotate(Math.PI / 2);
+            ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
+            applyImage(canvas.toDataURL("image/jpeg", 0.92));
+        };
+        img.src = imgUrl;
+    };
     const handleConfirm = () => {
         const scale = natural.w / dispSize.w;
         const cropX = rect.x * scale, cropY = rect.y * scale, cropW = rect.w * scale, cropH = rect.h * scale;
@@ -115,6 +146,15 @@ export function PhotoPositionEditor({ file, source, onCancel, onConfirm }) {
     const handleStyle = { position: "absolute", width: 26, height: 26, borderRadius: "50%", background: "#fff", border: `2px solid ${COLORS.accent}`, touchAction: "none" };
     return React.createElement("div", { style: { position: "fixed", inset: 0, zIndex: 95, background: "rgba(20,22,18,0.9)", display: "flex", flexDirection: "column" } },
         React.createElement("div", { style: { color: "#fff", fontSize: 13.5, fontWeight: 700, textAlign: "center", padding: "20px 20px 0" } }, "枠をドラッグして使う範囲を選べます"),
+        React.createElement("div", { style: { display: "flex", justifyContent: "center", padding: "8px 20px 0" } },
+            React.createElement("button", { onClick: handleRotate, style: {
+                    display: "flex", alignItems: "center", gap: 6,
+                    background: "rgba(255,255,255,0.14)", color: "#fff",
+                    border: "none", borderRadius: 999, padding: "6px 14px",
+                    fontSize: 12.5, fontWeight: 700, cursor: "pointer",
+                } },
+                React.createElement(RotateCcw, { size: 13 }),
+                "90\u00B0\u56DE\u8EE2")),
         React.createElement("div", { style: { flex: 1, minHeight: 0, overflowY: "auto", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px 20px" } },
             React.createElement("div", { onMouseMove: onMove, onMouseUp: endDrag, onMouseLeave: endDrag, onTouchMove: onMove, onTouchEnd: endDrag, style: {
                     position: "relative", width: dispSize.w, height: dispSize.h, touchAction: "none", flexShrink: 0
@@ -146,7 +186,7 @@ export function PhotoPositionEditor({ file, source, onCancel, onConfirm }) {
                     background: COLORS.accent, color: "#fff"
                 } }, "この範囲で使う")));
 }
-export function CropOverlay({ src, index, total, onConfirm, onUseFull, onSkip }) {
+export function CropOverlay({ src, index, total, onConfirm, onUseFull, onSkip, onAddMore }) {
     const containerRef = useRef(null);
     const imgRef = useRef(null);
     const [rect, setRect] = useState(null);
@@ -212,11 +252,29 @@ export function CropOverlay({ src, index, total, onConfirm, onUseFull, onSkip })
         } },
         React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 6 } },
             React.createElement(Crop, { size: 16, color: COLORS.accent }),
-            React.createElement("p", { style: { fontSize: 13, fontWeight: 700, margin: 0 } },
+            React.createElement("p", { style: { fontSize: 13, fontWeight: 700, margin: 0, flex: 1 } },
                 "\u753B\u50CF ",
                 index + 1,
                 "/",
-                total)),
+                total),
+            onAddMore && React.createElement("label", { style: {
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: COLORS.accent,
+                    border: `1px solid ${COLORS.accent}`,
+                    borderRadius: 999,
+                    padding: "5px 10px",
+                    cursor: "pointer",
+                } },
+                React.createElement(Plus, { size: 13 }),
+                "\u5199\u771F\u3092\u8FFD\u52A0",
+                React.createElement("input", { type: "file", accept: "image/*", multiple: true, style: { display: "none" }, onChange: (e) => {
+                        onAddMore(e.target.files);
+                        e.target.value = "";
+                    } }))),
         React.createElement("p", { style: { fontSize: 12.5, color: COLORS.inkSoft, lineHeight: 1.6, margin: "0 0 12px" } }, "\u6587\u5B57\u304C\u66F8\u3044\u3066\u3042\u308B\u90E8\u5206\u3060\u3051\u3092\u6307\u3067\u30C9\u30E9\u30C3\u30B0\u3057\u3066\u56F2\u3093\u3067\u304F\u3060\u3055\u3044\u3002\u5199\u771F\u3084\u5E83\u544A\u3001\u4E0B\u90E8\u306E\u30E1\u30CB\u30E5\u30FC\u306F\u5916\u3059\u3068\u8AAD\u307F\u53D6\u308A\u7CBE\u5EA6\u304C\u4E0A\u304C\u308A\u307E\u3059\u3002\u56F2\u307E\u306A\u3051\u308C\u3070\u753B\u50CF\u5168\u4F53\u3092\u8AAD\u307F\u53D6\u308A\u307E\u3059\u3002\u753B\u50CF\u304C\u6A2A\u5411\u304D\u30FB\u9006\u3055\u3084\u306E\u5834\u5408\u306F\u3001\u56DE\u8EE2\u30DC\u30BF\u30F3\u3067\u5411\u304D\u3092\u76F4\u3057\u3066\u304B\u3089\u56F2\u3093\u3067\u304F\u3060\u3055\u3044\u3002"),
         React.createElement("div", { ref: containerRef, onMouseDown: handleStart, onMouseMove: handleMove, onMouseUp: handleEnd, onTouchStart: handleStart, onTouchMove: handleMove, onTouchEnd: handleEnd, style: {
                 position: "relative",
