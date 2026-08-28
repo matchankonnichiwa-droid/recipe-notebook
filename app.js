@@ -3372,7 +3372,7 @@ function DraftEditor({ draft, setDraft, onSave, onDiscard, saveError, mode = "cr
         React.createElement("label", { style: fieldLabelStyle }, "\u6599\u7406\u540D"),
         React.createElement("input", { value: draft.title, onChange: (e) => updateTitle(e.target.value), style: inputStyle }),
         React.createElement("label", { style: fieldLabelStyle }, "\u5199\u771F\uFF08\u6700\u59273\u679A\uFF09"),
-        React.createElement("div", { style: { position: "relative", marginTop: 20, marginBottom: 16 } },
+        React.createElement("div", { style: { position: "relative", marginBottom: 24 } },
             React.createElement("div", { style: { display: "flex", alignItems: "flex-start", gap: 0 } },
                 [1, 2, 3].map((slot) => {
                     const field = slot === 1 ? "imageUrl" : slot === 2 ? "imageUrl2" : "imageUrl3";
@@ -3430,7 +3430,7 @@ function DraftEditor({ draft, setDraft, onSave, onDiscard, saveError, mode = "cr
                                     setPendingPhotoFile(file);
                                 } })));
                 })),
-            // Swap buttons float above the seam between two adjacent
+            // Swap buttons float below the seam between two adjacent
             // photos (absolutely positioned against the row, not inline in
             // the flex flow) — each photo is 92px wide with no gap between
             // them, so the seam after photo N sits at x = 92*N.
@@ -3438,7 +3438,7 @@ function DraftEditor({ draft, setDraft, onSave, onDiscard, saveError, mode = "cr
                 onClick: () => update({ imageUrl: draft.imageUrl2, imageUrl2: draft.imageUrl }),
                 title: "\u5199\u771F\u306E\u9806\u756A\u3092\u5165\u308C\u66FF\u3048\u308B",
                 style: {
-                    position: "absolute", top: -36, left: 92 - 14,
+                    position: "absolute", top: 92 + 6, left: 92 - 14,
                     display: "flex", alignItems: "center", justifyContent: "center",
                     width: 28, height: 28, borderRadius: 999, zIndex: 1,
                     border: `1px solid ${COLORS.line}`, background: "#fff", color: COLORS.inkSoft, cursor: "pointer",
@@ -3449,7 +3449,7 @@ function DraftEditor({ draft, setDraft, onSave, onDiscard, saveError, mode = "cr
                 onClick: () => update({ imageUrl2: draft.imageUrl3, imageUrl3: draft.imageUrl2 }),
                 title: "\u5199\u771F\u306E\u9806\u756A\u3092\u5165\u308C\u66FF\u3048\u308B",
                 style: {
-                    position: "absolute", top: -36, left: 92 * 2 - 14,
+                    position: "absolute", top: 92 + 6, left: 92 * 2 - 14,
                     display: "flex", alignItems: "center", justifyContent: "center",
                     width: 28, height: 28, borderRadius: 999, zIndex: 1,
                     border: `1px solid ${COLORS.line}`, background: "#fff", color: COLORS.inkSoft, cursor: "pointer",
