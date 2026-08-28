@@ -86,7 +86,14 @@ export function PhotoPositionEditor({ file, source, onCancel, onConfirm }) {
     const handleConfirm = () => {
         const scale = natural.w / dispSize.w;
         const cropX = rect.x * scale, cropY = rect.y * scale, cropW = rect.w * scale, cropH = rect.h * scale;
-        const outW = 1000, outH = Math.round(outW * (cropH / cropW));
+        // Kept deliberately small (600px / 0.6 quality rather than the
+        // 1000px / 0.85 this used to be) — these photos are embedded
+        // directly as base64 in the Realtime Database record rather than
+        // uploaded to Storage, and the whole recipes list (photos and all)
+        // gets re-fetched on every app launch. A recipe thumbnail doesn't
+        // need to be much bigger than it's ever displayed at, so this
+        // trades a little image quality for a much lighter app.
+        const outW = 600, outH = Math.round(outW * (cropH / cropW));
         const canvas = document.createElement("canvas");
         canvas.width = outW;
         canvas.height = outH;
@@ -96,7 +103,7 @@ export function PhotoPositionEditor({ file, source, onCancel, onConfirm }) {
         img.onload = () => {
             try {
                 ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, outW, outH);
-                onConfirm(canvas.toDataURL("image/jpeg", 0.85));
+                onConfirm(canvas.toDataURL("image/jpeg", 0.6));
             }
             catch (err) {
                 setExportError("この写真は外部サイトのものなので、位置を調整できませんでした。");

@@ -24,29 +24,35 @@ const firebaseConfig = {
 };
 window.firebase.initializeApp(firebaseConfig);
 const rtdb = window.firebase.database();
-const fbStorage = window.firebase.storage();
 // Shared family sync: everyone using this app points at the same Firebase
 // project and sees the same recipes/shopping list — there's no per-person
 // login, so uref() is just a thin passthrough to rtdb.ref().
 function uref(path) {
     return rtdb.ref(path);
 }
-// Recipe photos used to be embedded directly as base64 data URLs inside the
-// recipe's Realtime Database record. That meant every photo (often a couple
-// hundred KB apiece, two per recipe) rode along on every single read of the
-// recipes list — and the whole list is re-fetched and re-JSON.stringify'd
-// into localStorage on every change. As the recipe count grew this made the
-// initial load (and every subsequent sync) get slower and heavier, which is
-// exactly the "重い" symptom. Uploading to Storage instead and keeping only
-// the short download URL in the database record keeps that payload small
-// regardless of how many photos exist.
-async function uploadRecipePhoto(dataUrl, recipeId, slot) {
-    const res = await fetch(dataUrl);
-    const blob = await res.blob();
-    const path = `recipe-photos/${recipeId}-${slot}-${Date.now()}.jpg`;
-    const ref = fbStorage.ref().child(path);
-    await ref.put(blob, { contentType: "image/jpeg" });
-    return ref.getDownloadURL();
+// Recipe photos are embedded directly as base64 data URLs inside the
+// recipe's Realtime Database record (kept simple — no Firebase Storage,
+// which needs the paid Blaze plan). That means every photo rides along on
+// every read of the recipes list, so keeping each photo genuinely small is
+// what keeps the app fast as the recipe count grows — see the 600px/0.6
+// output in PhotoPositionEditor's handleConfirm, and this helper, which
+// re-compresses a photo already stored at a larger size down to that same
+// target (used by the one-time "写真を軽量化する" cleanup in Settings).
+function recompressDataUrl(dataUrl, maxDimension, quality) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+            const scale = Math.min(1, maxDimension / Math.max(img.naturalWidth, img.naturalHeight));
+            const canvas = document.createElement("canvas");
+            canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+            canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            resolve(canvas.toDataURL("image/jpeg", quality));
+        };
+        img.onerror = reject;
+        img.src = dataUrl;
+    });
 }
 // localStorage is kept as a fallback cache only (used for instant first
 // paint before the Firebase listener responds, and so the app still shows
@@ -2002,17 +2008,16 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
     const saveRecipe = async (recipeData) => {
         const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
         // If imageUrl/imageUrl2 came in as a raw base64 data URL (e.g. the
-        // screenshot auto-attached from a photo import) rather than an
-        // already-light URL, upload it to Storage first and save the
-        // download URL instead — see uploadRecipePhoto for why this matters
-        // for keeping the app fast as the recipe count grows.
+        // screenshot auto-attached from a photo import), re-compress it down
+        // to the same small target used everywhere else — see
+        // recompressDataUrl for why this matters for keeping the app fast.
         let imageUrl = recipeData.imageUrl || "";
         let imageUrl2 = recipeData.imageUrl2 || "";
         if (imageUrl.startsWith("data:")) {
-            imageUrl = await uploadRecipePhoto(imageUrl, id, "imageUrl").catch(() => imageUrl);
+            imageUrl = await recompressDataUrl(imageUrl, 600, 0.6).catch(() => imageUrl);
         }
         if (imageUrl2.startsWith("data:")) {
-            imageUrl2 = await uploadRecipePhoto(imageUrl2, id, "imageUrl2").catch(() => imageUrl2);
+            imageUrl2 = await recompressDataUrl(imageUrl2, 600, 0.6).catch(() => imageUrl2);
         }
         const newRecipe = {
             ...recipeData,
@@ -3315,25 +3320,7 @@ function DraftEditor({ draft, setDraft, onSave, onDiscard, saveError, mode = "cr
             file: pendingPhotoFile || undefined,
             source: !pendingPhotoFile && editingExistingPhoto ? draft[photoSlot === 2 ? "imageUrl2" : "imageUrl"] : undefined,
             onCancel: () => { setPendingPhotoFile(null); setEditingExistingPhoto(false); },
-            onConfirm: (dataUrl) => {
-                const slot = photoSlot === 2 ? "imageUrl2" : "imageUrl";
-                // Show the local data URL immediately so the preview updates
-                // without waiting on a network round-trip, then swap it for
-                // the small Storage download URL once the upload finishes —
-                // that's what actually keeps the saved recipe lightweight.
-                // setDraft (not the `update` closure above) is used for the
-                // async continuation so it isn't working from a stale
-                // snapshot of `draft` taken before this render.
-                update({ [slot]: dataUrl });
-                setPendingPhotoFile(null);
-                setEditingExistingPhoto(false);
-                uploadRecipePhoto(dataUrl, draft.id || `tmp-${Date.now()}`, slot)
-                    .then((uploadedUrl) => setDraft((prev) => (prev ? { ...prev, [slot]: uploadedUrl } : prev)))
-                    .catch(() => {
-                    // Upload failed (offline, etc.) — the local data URL
-                    // saved above still works, just isn't as light.
-                });
-            },
+            onConfirm: (dataUrl) => { update({ [photoSlot === 2 ? "imageUrl2" : "imageUrl"]: dataUrl }); setPendingPhotoFile(null); setEditingExistingPhoto(false); },
         }),
         React.createElement("label", { style: fieldLabelStyle }, "\u4EBA\u6570\uFF08\u4F55\u4EBA\u5206\u306E\u5206\u91CF\u304B\u3092\u8A18\u9332\u3057\u307E\u3059\uFF09"),
         React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 14 } },
@@ -4131,14 +4118,15 @@ function App() {
         };
         input.click();
     }
-    // One-time cleanup for recipes saved before photos were moved to
-    // Storage (see uploadRecipePhoto/saveRecipe above): those still have
-    // the full base64 image baked directly into their Realtime Database
-    // record, which is what makes every app launch slow as the recipe
-    // count grows — the whole `recipes` node, images included, is what
-    // gets fetched and re-JSON.stringify'd into localStorage on load. This
-    // walks every saved recipe, uploads any inline data-URL photos it
-    // finds to Storage, and rewrites the record with the light URL instead.
+    // One-time cleanup for recipes saved with a photo at the old, larger
+    // size (1000px / quality 0.85 — see photo-editor.js's history). Since
+    // photos are embedded directly as base64 in each recipe's Realtime
+    // Database record (deliberately not using Firebase Storage, which
+    // needs the paid Blaze plan), the whole `recipes` node — photos and
+    // all — is what gets re-fetched on every app launch and re-written to
+    // localStorage on every change. Re-compressing existing photos down to
+    // the same small target new ones already use (600px / 0.6, in
+    // recompressDataUrl) shrinks that payload without needing Storage.
     const [photoMigrationStatus, setPhotoMigrationStatus] = useState(null); // null | {done, total} | "done" | "error"
     async function migrateEmbeddedPhotos() {
         // Set a visible "starting" state synchronously, before anything
@@ -4172,19 +4160,18 @@ function App() {
             try {
                 const patch = {};
                 if ((r.imageUrl || "").startsWith("data:")) {
-                    patch.imageUrl = await uploadRecipePhoto(r.imageUrl, r.id, "imageUrl");
+                    patch.imageUrl = await recompressDataUrl(r.imageUrl, 600, 0.6);
                 }
                 if ((r.imageUrl2 || "").startsWith("data:")) {
-                    patch.imageUrl2 = await uploadRecipePhoto(r.imageUrl2, r.id, "imageUrl2");
+                    patch.imageUrl2 = await recompressDataUrl(r.imageUrl2, 600, 0.6);
                 }
                 await uref(`recipes/${r.id}`).update(patch);
             }
             catch (e) {
                 // Leave this one's photo as-is (still works, just heavy) and
-                // keep going — one failed upload (e.g. a flaky connection,
-                // or Storage permissions not set up yet) shouldn't stop the
-                // rest of the batch. Surface it once at the end instead of
-                // per-item, so a permissions problem doesn't spam N alerts.
+                // keep going — one failure (e.g. a corrupt data URL)
+                // shouldn't stop the rest of the batch. Surface it once at
+                // the end instead of per-item, so it doesn't spam N alerts.
                 failures++;
                 if (failures === 1) {
                     console.error("photo migration item failed:", e);
@@ -4193,7 +4180,7 @@ function App() {
             setPhotoMigrationStatus({ done: i + 1, total: targets.length });
         }
         if (failures > 0) {
-            alert(`${failures}件の写真をアップロードできませんでした。Firebase Storageの書き込み権限が設定されていない可能性があります。`);
+            alert(`${failures}件の写真を軽量化できませんでした。データが壊れている可能性があります。`);
         }
         setPhotoMigrationStatus("done");
     }
