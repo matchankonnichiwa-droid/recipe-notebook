@@ -191,22 +191,78 @@ export function CropOverlay({ src, index, total, onConfirm, onUseFull, onSkip, o
     const imgRef = useRef(null);
     const [rect, setRect] = useState(null);
     const [rotation, setRotation] = useState(0); // 0 | 90 | 180 | 270, clockwise
+    // Pinch-to-zoom state. `rect` (and all the drag math below) stays in
+    // the image's original, unzoomed layout coordinates throughout — pan
+    // and zoom are applied only when converting to/from screen pixels, so
+    // handleConfirm's existing natural-pixel math (based on
+    // img.clientWidth, which a CSS transform doesn't change) keeps working
+    // unmodified regardless of how far the person has zoomed in.
+    const [zoom, setZoom] = useState(1);
+    const [pan, setPan] = useState({ x: 0, y: 0 });
     const dragStart = useRef(null);
+    const pinchState = useRef(null); // { dist, midpoint } from the previous pinch move
+    const toImageSpace = (containerPoint) => ({
+        x: (containerPoint.x - pan.x) / zoom,
+        y: (containerPoint.y - pan.y) / zoom,
+    });
     const getPos = (e) => {
         const bounds = containerRef.current.getBoundingClientRect();
         const point = e.touches ? e.touches[0] : e;
         return { x: point.clientX - bounds.left, y: point.clientY - bounds.top };
     };
+    const getPinchInfo = (e) => {
+        const bounds = containerRef.current.getBoundingClientRect();
+        const [t1, t2] = e.touches;
+        const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+        const midpoint = {
+            x: (t1.clientX + t2.clientX) / 2 - bounds.left,
+            y: (t1.clientY + t2.clientY) / 2 - bounds.top,
+        };
+        return { dist, midpoint };
+    };
     const handleStart = (e) => {
-        const p = getPos(e);
+        // Zoom composes awkwardly with rotation's own transform (they'd
+        // need separate transform-origins), so pinch is only active at the
+        // default 0° rotation — which is also, in practice, the case where
+        // someone wants to zoom in for a closer look at small text.
+        if (e.touches && e.touches.length === 2 && rotation === 0) {
+            dragStart.current = null;
+            pinchState.current = getPinchInfo(e);
+            return;
+        }
+        if (e.touches && e.touches.length >= 2)
+            return;
+        const p = toImageSpace(getPos(e));
         dragStart.current = p;
         setRect({ x: p.x, y: p.y, w: 0, h: 0 });
     };
     const handleMove = (e) => {
+        if (e.touches && e.touches.length === 2 && rotation === 0) {
+            e.preventDefault();
+            const { dist, midpoint } = getPinchInfo(e);
+            if (pinchState.current) {
+                const scaleDelta = dist / pinchState.current.dist;
+                setZoom((z) => {
+                    const nextZoom = Math.min(4, Math.max(1, z * scaleDelta));
+                    // Keep the point under the fingers visually stationary
+                    // while scaling, rather than always zooming toward the
+                    // container's center.
+                    setPan((p) => ({
+                        x: midpoint.x - (midpoint.x - p.x) * (nextZoom / z),
+                        y: midpoint.y - (midpoint.y - p.y) * (nextZoom / z),
+                    }));
+                    return nextZoom;
+                });
+            }
+            pinchState.current = { dist, midpoint };
+            return;
+        }
+        if (e.touches && e.touches.length >= 2)
+            return;
         if (!dragStart.current)
             return;
         e.preventDefault();
-        const p = getPos(e);
+        const p = toImageSpace(getPos(e));
         const s = dragStart.current;
         setRect({
             x: Math.min(s.x, p.x),
@@ -215,15 +271,20 @@ export function CropOverlay({ src, index, total, onConfirm, onUseFull, onSkip, o
             h: Math.abs(p.y - s.y),
         });
     };
-    const handleEnd = () => {
+    const handleEnd = (e) => {
         dragStart.current = null;
+        if (!e.touches || e.touches.length < 2)
+            pinchState.current = null;
     };
     const handleRotate = () => {
         // A rotation changes which pixels the on-screen crop box would
         // correspond to, so any in-progress selection no longer lines up —
-        // clear it rather than silently keep a now-wrong rect.
+        // clear it rather than silently keep a now-wrong rect. Reset any
+        // zoom/pan too, for the same reason.
         setRect(null);
         setRotation((r) => (r + 90) % 360);
+        setZoom(1);
+        setPan({ x: 0, y: 0 });
     };
     const handleConfirm = () => {
         const img = imgRef.current;
@@ -275,8 +336,8 @@ export function CropOverlay({ src, index, total, onConfirm, onUseFull, onSkip, o
                         onAddMore(e.target.files);
                         e.target.value = "";
                     } }))),
-        React.createElement("p", { style: { fontSize: 12.5, color: COLORS.inkSoft, lineHeight: 1.6, margin: "0 0 12px" } }, "\u6587\u5B57\u304C\u66F8\u3044\u3066\u3042\u308B\u90E8\u5206\u3060\u3051\u3092\u6307\u3067\u30C9\u30E9\u30C3\u30B0\u3057\u3066\u56F2\u3093\u3067\u304F\u3060\u3055\u3044\u3002\u5199\u771F\u3084\u5E83\u544A\u3001\u4E0B\u90E8\u306E\u30E1\u30CB\u30E5\u30FC\u306F\u5916\u3059\u3068\u8AAD\u307F\u53D6\u308A\u7CBE\u5EA6\u304C\u4E0A\u304C\u308A\u307E\u3059\u3002\u56F2\u307E\u306A\u3051\u308C\u3070\u753B\u50CF\u5168\u4F53\u3092\u8AAD\u307F\u53D6\u308A\u307E\u3059\u3002\u753B\u50CF\u304C\u6A2A\u5411\u304D\u30FB\u9006\u3055\u3084\u306E\u5834\u5408\u306F\u3001\u56DE\u8EE2\u30DC\u30BF\u30F3\u3067\u5411\u304D\u3092\u76F4\u3057\u3066\u304B\u3089\u56F2\u3093\u3067\u304F\u3060\u3055\u3044\u3002"),
-        React.createElement("div", { ref: containerRef, onMouseDown: handleStart, onMouseMove: handleMove, onMouseUp: handleEnd, onTouchStart: handleStart, onTouchMove: handleMove, onTouchEnd: handleEnd, style: {
+        React.createElement("p", { style: { fontSize: 12.5, color: COLORS.inkSoft, lineHeight: 1.6, margin: "0 0 12px" } }, "\u6587\u5B57\u304C\u66F8\u3044\u3066\u3042\u308B\u90E8\u5206\u3060\u3051\u3092\u6307\u3067\u30C9\u30E9\u30C3\u30B0\u3057\u3066\u56F2\u3093\u3067\u304F\u3060\u3055\u3044\u3002\u5199\u771F\u3084\u5E83\u544A\u3001\u4E0B\u90E8\u306E\u30E1\u30CB\u30E5\u30FC\u306F\u5916\u3059\u3068\u8AAD\u307F\u53D6\u308A\u7CBE\u5EA6\u304C\u4E0A\u304C\u308A\u307E\u3059\u3002\u56F2\u307E\u306A\u3051\u308C\u3070\u753B\u50CF\u5168\u4F53\u3092\u8AAD\u307F\u53D6\u308A\u307E\u3059\u3002\u753B\u50CF\u304C\u6A2A\u5411\u304D\u30FB\u9006\u3055\u3084\u306E\u5834\u5408\u306F\u3001\u56DE\u8EE2\u30DC\u30BF\u30F3\u3067\u5411\u304D\u3092\u76F4\u3057\u3066\u304B\u3089\u56F2\u3093\u3067\u304F\u3060\u3055\u3044\u3002\u4E8C\u672C\u6307\u3067\u30D4\u30F3\u30C1\u3059\u308B\u3068\u62E1\u5927\u3067\u304D\u307E\u3059\u3002"),
+        React.createElement("div", { ref: containerRef, onMouseDown: handleStart, onMouseMove: handleMove, onMouseUp: handleEnd, onMouseLeave: handleEnd, onTouchStart: handleStart, onTouchMove: handleMove, onTouchEnd: handleEnd, onDoubleClick: () => { setZoom(1); setPan({ x: 0, y: 0 }); }, style: {
                 position: "relative",
                 touchAction: "none",
                 borderRadius: 12,
@@ -298,15 +359,23 @@ export function CropOverlay({ src, index, total, onConfirm, onUseFull, onSkip, o
                     width: (rotation === 90 || rotation === 270) ? "auto" : "100%",
                     display: "block",
                     userSelect: "none",
-                    transform: `rotate(${rotation}deg)`,
-                    transition: "transform 0.15s",
+                    // Order matters: rotate first (as before — this alone
+                    // is what rotation ever did), then translate/scale for
+                    // pinch-zoom on top of that. transformOrigin "0 0" so
+                    // translate/scale line up with the top-left-anchored
+                    // math in toImageSpace() above; at the default zoom=1,
+                    // pan=(0,0) this whole prefix is the identity, so plain
+                    // rotation-only behavior is unchanged from before.
+                    transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom}) rotate(${rotation}deg)`,
+                    transformOrigin: "0 0",
+                    transition: pinchState.current ? "none" : "transform 0.15s",
                 } }),
             rect && (React.createElement("div", { style: {
                     position: "absolute",
-                    left: rect.x,
-                    top: rect.y,
-                    width: rect.w,
-                    height: rect.h,
+                    left: pan.x + rect.x * zoom,
+                    top: pan.y + rect.y * zoom,
+                    width: rect.w * zoom,
+                    height: rect.h * zoom,
                     border: `2px solid ${COLORS.accent}`,
                     background: "rgba(184,134,43,0.18)",
                     pointerEvents: "none",
