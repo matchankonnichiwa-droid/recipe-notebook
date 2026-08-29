@@ -1345,12 +1345,40 @@ function TodoApp({ listKey, myName, ungroupedLabel }) {
     const activeList = listKey;
     // realtime listeners for todos/shopping/groups
     useEffect(() => {
+        // Show cached items instantly while the Firebase listener connects
+        // (same pattern recipes already use) — this is what was missing
+        // here, so opening the 買い物 tab always waited on a fresh network
+        // round-trip before showing anything, which read as "not
+        // reflecting" even though the data itself wasn't especially large.
+        try {
+            const cachedItems = localStorage.getItem("todoItems");
+            if (cachedItems) {
+                const parsed = JSON.parse(cachedItems);
+                setItems(parsed);
+                setReadyLists((prev) => ({
+                    ...prev,
+                    ...Object.fromEntries(Object.keys(parsed).map((k) => [k, true])),
+                }));
+            }
+        }
+        catch {
+            // ignore
+        }
         const refs = [];
         Object.keys(LISTS).forEach((key) => {
             const itemsRef = uref(LISTS[key].dbKey);
             const cb = itemsRef.on("value", (snap) => {
                 const val = snap.val();
-                setItems((prev) => ({ ...prev, [key]: val ? val : [] }));
+                setItems((prev) => {
+                    const next = { ...prev, [key]: val ? val : [] };
+                    try {
+                        localStorage.setItem("todoItems", JSON.stringify(next));
+                    }
+                    catch {
+                        // ignore — cache is best-effort
+                    }
+                    return next;
+                });
                 setReadyLists((prev) => ({ ...prev, [key]: true }));
             });
             refs.push([itemsRef, cb]);
@@ -4341,6 +4369,48 @@ function App() {
         }
         if (failures > 0) {
             alert(`${failures}件の写真を軽量化できませんでした。データが壊れている可能性があります。`);
+        }
+        // Phase 2: 献立(meal-plan) entries. addMealPlanEntry snapshots a
+        // copy of the recipe's photo into meal-plan/{date} at the moment a
+        // dish is added, so it stays correct even if the recipe is later
+        // deleted — but that means every day's entries carry their own
+        // full copy of whatever the recipe's photo was AT THAT TIME. Days
+        // added before recipes were compressed still have the old, large
+        // version baked in, and the recipe migration above only touches
+        // recipes/ — this is what actually made 献立 (and, since it's the
+        // same underlying fetch, anywhere else that loads the whole
+        // meal-plan tree) slow to load even after recipes were cleaned up.
+        let mealPlanFailures = 0;
+        try {
+            const mpSnap = await uref("meal-plan").once("value");
+            const mealPlan = mpSnap.val() || {};
+            const dateStrs = Object.keys(mealPlan).filter((d) => (mealPlan[d] || []).some((e) => (e.imageUrl || "").startsWith("data:")));
+            if (dateStrs.length > 0) {
+                setPhotoMigrationStatus({ done: 0, total: dateStrs.length });
+                for (let i = 0; i < dateStrs.length; i++) {
+                    const dateStr = dateStrs[i];
+                    try {
+                        const entries = mealPlan[dateStr] || [];
+                        const nextEntries = await Promise.all(entries.map(async (e) => (e.imageUrl || "").startsWith("data:")
+                            ? { ...e, imageUrl: await recompressDataUrl(e.imageUrl, 600, 0.6).catch(() => e.imageUrl) }
+                            : e));
+                        await uref(`meal-plan/${dateStr}`).set(nextEntries);
+                    }
+                    catch (e) {
+                        mealPlanFailures++;
+                        if (mealPlanFailures === 1) {
+                            console.error("meal-plan photo migration item failed:", e);
+                        }
+                    }
+                    setPhotoMigrationStatus({ done: i + 1, total: dateStrs.length });
+                }
+            }
+        }
+        catch (e) {
+            console.error("meal-plan photo migration failed:", e);
+        }
+        if (mealPlanFailures > 0) {
+            alert(`献立の写真${mealPlanFailures}件を軽量化できませんでした。`);
         }
         setPhotoMigrationStatus("done");
     }
