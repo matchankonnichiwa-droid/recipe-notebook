@@ -881,8 +881,24 @@ function preprocessCanvasForOcr(ctx, width, height) {
         hist[v]++;
     }
     const threshold = otsuThreshold(hist, n);
+    // OCR engines expect dark text on a light background. That's true for
+    // most photographed/screenshotted recipes, but dark-mode screenshots
+    // (e.g. X/Twitter's black background with white text) are the opposite
+    // — binarizing them the same way as a normal image produces white text
+    // on a black background, which reads as close to unrecognizable to
+    // Tesseract. Detect which side of the threshold is the majority (that's
+    // the background, whichever color it is) and make sure IT always ends
+    // up white, flipping the mapping when the background turns out to be
+    // the dark side.
+    let aboveCount = 0;
+    for (let p = 0; p < n; p++) {
+        if (stretched[p] >= threshold)
+            aboveCount++;
+    }
+    const backgroundIsDark = aboveCount < n - aboveCount;
     for (let i = 0, p = 0; i < d.length; i += 4, p++) {
-        const v = stretched[p] >= threshold ? 255 : 0;
+        const isAboveThreshold = stretched[p] >= threshold;
+        const v = (isAboveThreshold !== backgroundIsDark) ? 255 : 0;
         d[i] = v;
         d[i + 1] = v;
         d[i + 2] = v;
