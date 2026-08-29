@@ -191,18 +191,50 @@ export function CropOverlay({ src, index, total, onConfirm, onUseFull, onSkip, o
     const imgRef = useRef(null);
     const [rect, setRect] = useState(null);
     const [rotation, setRotation] = useState(0); // 0 | 90 | 180 | 270, clockwise
+    // Vertical pan, for scrolling through a tall image inside the (fixed-
+    // height) viewport below with two fingers, while the crop box stays
+    // put and can still be drawn with one finger. `rect` is kept in the
+    // image's own unpanned layout coordinates throughout (screen position
+    // = rect position + panY), so handleConfirm's existing natural-pixel
+    // math — based on img.clientWidth/clientHeight, which a CSS transform
+    // doesn't change — keeps working unmodified regardless of scroll
+    // position.
+    const [panY, setPanY] = useState(0);
     const dragStart = useRef(null);
+    const twoFingerY = useRef(null); // previous 2-finger midpoint Y, while active
     const getPos = (e) => {
         const bounds = containerRef.current.getBoundingClientRect();
         const point = e.touches ? e.touches[0] : e;
-        return { x: point.clientX - bounds.left, y: point.clientY - bounds.top };
+        return { x: point.clientX - bounds.left, y: point.clientY - bounds.top - panY };
+    };
+    const clampPanY = (value) => {
+        const img = imgRef.current;
+        const container = containerRef.current;
+        if (!img || !container)
+            return value;
+        const maxScroll = Math.max(0, img.offsetHeight - container.offsetHeight);
+        return Math.min(0, Math.max(-maxScroll, value));
     };
     const handleStart = (e) => {
+        if (e.touches && e.touches.length >= 2) {
+            dragStart.current = null;
+            twoFingerY.current = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+            return;
+        }
         const p = getPos(e);
         dragStart.current = p;
         setRect({ x: p.x, y: p.y, w: 0, h: 0 });
     };
     const handleMove = (e) => {
+        if (e.touches && e.touches.length >= 2) {
+            e.preventDefault();
+            const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+            if (twoFingerY.current != null) {
+                setPanY((y) => clampPanY(y + (midY - twoFingerY.current)));
+            }
+            twoFingerY.current = midY;
+            return;
+        }
         if (!dragStart.current)
             return;
         e.preventDefault();
@@ -215,15 +247,19 @@ export function CropOverlay({ src, index, total, onConfirm, onUseFull, onSkip, o
             h: Math.abs(p.y - s.y),
         });
     };
-    const handleEnd = () => {
+    const handleEnd = (e) => {
         dragStart.current = null;
+        if (!e.touches || e.touches.length < 2)
+            twoFingerY.current = null;
     };
     const handleRotate = () => {
         // A rotation changes which pixels the on-screen crop box would
         // correspond to, so any in-progress selection no longer lines up —
-        // clear it rather than silently keep a now-wrong rect.
+        // clear it rather than silently keep a now-wrong rect. Reset any
+        // scroll position too, for the same reason.
         setRect(null);
         setRotation((r) => (r + 90) % 360);
+        setPanY(0);
     };
     const handleConfirm = () => {
         const img = imgRef.current;
@@ -275,7 +311,7 @@ export function CropOverlay({ src, index, total, onConfirm, onUseFull, onSkip, o
                         onAddMore(e.target.files);
                         e.target.value = "";
                     } }))),
-        React.createElement("p", { style: { fontSize: 12.5, color: COLORS.inkSoft, lineHeight: 1.6, margin: "0 0 12px" } }, "文字が書いてある部分だけを指でドラッグして囲んでください。写真や広告、下部のメニューは外すと読み取り精度が上がります。囲まなければ画像全体を読み取ります。画像が横向き・逆さやの場合は、回転ボタンで向きを直してから囲んでください。"),
+        React.createElement("p", { style: { fontSize: 12.5, color: COLORS.inkSoft, lineHeight: 1.6, margin: "0 0 12px" } }, "文字が書いてある部分だけを指でドラッグして囲んでください。写真や広告、下部のメニューは外すと読み取り精度が上がります。囲まなければ画像全体を読み取ります。画像が横向き・逆さやの場合は、回転ボタンで向きを直してから囲んでください。縦長の写真は2本指でドラッグすると中でスクロールできます。"),
         React.createElement("div", { ref: containerRef, onMouseDown: handleStart, onMouseMove: handleMove, onMouseUp: handleEnd, onTouchStart: handleStart, onTouchMove: handleMove, onTouchEnd: handleEnd, style: {
                 position: "relative",
                 touchAction: "none",
@@ -285,22 +321,19 @@ export function CropOverlay({ src, index, total, onConfirm, onUseFull, onSkip, o
                 marginBottom: 10,
                 background: "#000",
                 display: "flex",
-                alignItems: "center",
+                alignItems: (rotation === 90 || rotation === 270) ? "center" : "flex-start",
                 justifyContent: "center",
                 // Rotating 90/270 swaps the visual footprint of the image;
                 // give the container room to show it without clipping
                 // rather than constraining to the unrotated aspect ratio.
                 aspectRatio: (rotation === 90 || rotation === 270) ? "1 / 1" : "auto",
-                // Without this, a flex child sized by its image's intrinsic
-                // aspect ratio can get squeezed shorter than that by the
-                // surrounding flex column (rather than the page actually
-                // overflowing and scrolling) whenever the image is taller
-                // than the visible screen — which silently hid the top of
-                // any tall screenshot instead of making it reachable by
-                // scrolling. flexShrink: 0 forces this box to always lay
-                // out at the image's real full size; the outer panel's
-                // overflowY: "auto" (see the wrapping div this all sits in)
-                // is what then makes the rest reachable by scrolling.
+                // A tall image is capped to this viewport height and
+                // becomes pannable (two-finger drag, handled above) rather
+                // than stretching the whole screen — the crop box itself
+                // still starts covering the full image by default either
+                // way; this is only about being able to see and select
+                // parts of a tall photo that don't fit on screen at once.
+                maxHeight: "55vh",
                 flexShrink: 0,
             } },
             React.createElement("img", { ref: imgRef, src: src, draggable: false, style: {
@@ -309,13 +342,13 @@ export function CropOverlay({ src, index, total, onConfirm, onUseFull, onSkip, o
                     width: (rotation === 90 || rotation === 270) ? "auto" : "100%",
                     display: "block",
                     userSelect: "none",
-                    transform: `rotate(${rotation}deg)`,
-                    transition: "transform 0.15s",
+                    transform: `translateY(${panY}px) rotate(${rotation}deg)`,
+                    transition: twoFingerY.current != null ? "none" : "transform 0.15s",
                 } }),
             rect && (React.createElement("div", { style: {
                     position: "absolute",
                     left: rect.x,
-                    top: rect.y,
+                    top: rect.y + panY,
                     width: rect.w,
                     height: rect.h,
                     border: `2px solid ${COLORS.accent}`,
