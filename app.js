@@ -54,16 +54,70 @@ function recompressDataUrl(dataUrl, maxDimension, quality) {
         img.src = dataUrl;
     });
 }
-// localStorage is kept as a fallback cache only (used for instant first
-// paint before the Firebase listener responds, and so the app still shows
-// something if the network is briefly unavailable).
+// Local cache for instant first paint (showing last-seen data immediately
+// while the Firebase listener connects, and so the app still shows
+// something if the network is briefly unavailable) — backed by IndexedDB
+// rather than localStorage. localStorage is synchronous and blocks the
+// main thread on every read/write, and is capped around 5–10MB total,
+// which recipes-with-photos data was creeping toward as the collection
+// grew; IndexedDB reads/writes off the main thread and has no practical
+// size ceiling for data at this scale. Falls back to localStorage if
+// IndexedDB isn't available (e.g. private browsing in some browsers).
+const DB_NAME = "recipe-notebook-cache";
+const DB_STORE = "kv";
+function openCacheDb() {
+    return new Promise((resolve, reject) => {
+        if (!window.indexedDB) {
+            reject(new Error("indexedDB unavailable"));
+            return;
+        }
+        const req = indexedDB.open(DB_NAME, 1);
+        req.onupgradeneeded = () => {
+            if (!req.result.objectStoreNames.contains(DB_STORE))
+                req.result.createObjectStore(DB_STORE);
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+}
 const storage = {
     async get(key) {
-        const raw = localStorage.getItem(key);
-        return raw === null ? null : { key, value: raw };
+        try {
+            const db = await openCacheDb();
+            const value = await new Promise((resolve, reject) => {
+                const tx = db.transaction(DB_STORE, "readonly");
+                const req = tx.objectStore(DB_STORE).get(key);
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => reject(req.error);
+            });
+            return value === undefined ? null : { key, value };
+        }
+        catch {
+            // IndexedDB unavailable or failed — fall back to localStorage
+            // so caching still works, just without its main-thread-free
+            // benefit.
+            const raw = localStorage.getItem(key);
+            return raw === null ? null : { key, value: raw };
+        }
     },
     async set(key, value) {
-        localStorage.setItem(key, value);
+        try {
+            const db = await openCacheDb();
+            await new Promise((resolve, reject) => {
+                const tx = db.transaction(DB_STORE, "readwrite");
+                tx.objectStore(DB_STORE).put(value, key);
+                tx.oncomplete = resolve;
+                tx.onerror = () => reject(tx.error);
+            });
+        }
+        catch {
+            try {
+                localStorage.setItem(key, value);
+            }
+            catch {
+                // best-effort cache — a failure here shouldn't break anything
+            }
+        }
         return { key, value };
     },
 };
@@ -325,6 +379,32 @@ const APPLIANCE_ICONS = {
     圧力鍋: "🫕",
     電子レンジ: "📡",
 };
+// The list/filter/meal-plan views only ever need a recipe's identity and
+// classification, not its full ingredients/steps/memo — this trims a
+// recipe down to just that (plus ingredient *names*, so searching by
+// ingredient from the list still works without needing amounts, groups,
+// or anything else that only matters once the recipe is actually open).
+// See writeRecipe for where this gets written alongside the full record.
+function buildRecipeIndexEntry(recipe) {
+    return {
+        id: recipe.id,
+        title: recipe.title || "",
+        imageUrl: recipe.imageUrl || "",
+        imageUrl2: recipe.imageUrl2 || "",
+        imageUrl3: recipe.imageUrl3 || "",
+        dishCategory: recipe.dishCategory || null,
+        meatType: recipe.meatType || null,
+        noodleType: recipe.noodleType || null,
+        vegType: recipe.vegType || null,
+        soupType: recipe.soupType || null,
+        appliance: recipe.appliance || null,
+        sourceType: recipe.sourceType || null,
+        favorite: !!recipe.favorite,
+        savedAt: recipe.savedAt || "",
+        tags: recipe.tags || [],
+        ingredientNames: (recipe.ingredients || []).map((i) => i.name).filter(Boolean),
+    };
+}
 // Detects which cooking appliance a recipe uses from its title/steps/memo,
 // so recipes can be filtered into an appliance tab (e.g. air fryer vs. Hot
 // Cook) separately from the dish-genre grouping.
@@ -1366,20 +1446,41 @@ function TodoApp({ listKey, myName, ungroupedLabel }) {
         // here, so opening the 買い物 tab always waited on a fresh network
         // round-trip before showing anything, which read as "not
         // reflecting" even though the data itself wasn't especially large.
-        try {
-            const cachedItems = localStorage.getItem("todoItems");
-            if (cachedItems) {
-                const parsed = JSON.parse(cachedItems);
-                setItems(parsed);
-                setReadyLists((prev) => ({
-                    ...prev,
-                    ...Object.fromEntries(Object.keys(parsed).map((k) => [k, true])),
-                }));
+        (async () => {
+            let parsed = null;
+            try {
+                const cached = await storage.get("todoItems");
+                if (cached) {
+                    parsed = JSON.parse(cached.value);
+                }
+                else {
+                    // One-time migration from the old localStorage-only cache
+                    // (see the same pattern's comment on the recipes cache
+                    // above for why).
+                    const legacy = localStorage.getItem("todoItems");
+                    if (legacy) {
+                        parsed = JSON.parse(legacy);
+                        await storage.set("todoItems", legacy);
+                    }
+                }
+                if (parsed) {
+                    setItems(parsed);
+                    setReadyLists((prev) => ({
+                        ...prev,
+                        ...Object.fromEntries(Object.keys(parsed).map((k) => [k, true])),
+                    }));
+                }
             }
-        }
-        catch {
-            // ignore
-        }
+            catch {
+                // ignore
+            }
+            try {
+                localStorage.removeItem("todoItems");
+            }
+            catch {
+                // ignore
+            }
+        })();
         const refs = [];
         Object.keys(LISTS).forEach((key) => {
             const itemsRef = uref(LISTS[key].dbKey);
@@ -1387,12 +1488,9 @@ function TodoApp({ listKey, myName, ungroupedLabel }) {
                 const val = snap.val();
                 setItems((prev) => {
                     const next = { ...prev, [key]: val ? val : [] };
-                    try {
-                        localStorage.setItem("todoItems", JSON.stringify(next));
-                    }
-                    catch {
+                    storage.set("todoItems", JSON.stringify(next)).catch(() => {
                         // ignore — cache is best-effort
-                    }
+                    });
                     return next;
                 });
                 setReadyLists((prev) => ({ ...prev, [key]: true }));
@@ -1852,35 +1950,105 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
     useEffect(() => {
         // Show cached data instantly while the Firebase listener connects, so
         // the app isn't blank on a slow connection.
-        try {
-            const cachedRecipes = localStorage.getItem("recipes");
-            if (cachedRecipes)
-                setRecipes(JSON.parse(cachedRecipes));
-        }
-        catch {
-            // ignore
-        }
-        const recipesRef = uref("recipes");
-        const recipesCallback = (snapshot) => {
+        (async () => {
+            try {
+                const cached = await storage.get("recipes");
+                if (cached) {
+                    setRecipes(JSON.parse(cached.value));
+                }
+                else {
+                    // One-time migration: this cache used to live directly in
+                    // localStorage under the same key, before it moved to
+                    // IndexedDB above. If nothing's in IndexedDB yet, carry
+                    // over whatever's still sitting in localStorage from
+                    // before the upgrade (for continuity — otherwise the very
+                    // first load after upgrading would lose the instant-paint
+                    // benefit for one session), then migrate it over and
+                    // reclaim the localStorage space.
+                    const legacy = localStorage.getItem("recipes");
+                    if (legacy) {
+                        setRecipes(JSON.parse(legacy));
+                        await storage.set("recipes", legacy);
+                    }
+                }
+            }
+            catch {
+                // ignore
+            }
+            try {
+                localStorage.removeItem("recipes");
+            }
+            catch {
+                // ignore
+            }
+        })();
+        // One-time, shared migration: recipe-index/ (see buildRecipeIndexEntry
+        // and writeRecipe above) didn't always exist — recipes saved before
+        // this update only have their full record under recipes/. Backfill
+        // the index for those once, gated on a flag in the database so it
+        // only ever runs once total (for whichever family member's device
+        // happens to load the app first after the update), not once per
+        // device.
+        (async () => {
+            try {
+                const flagSnap = await uref("meta/recipeIndexBuilt").once("value");
+                if (flagSnap.val())
+                    return;
+                const fullSnap = await uref("recipes").once("value");
+                const all = fullSnap.val() || {};
+                const updates = {};
+                Object.keys(all).forEach((id) => {
+                    updates[`recipe-index/${id}`] = buildRecipeIndexEntry(all[id]);
+                });
+                updates["meta/recipeIndexBuilt"] = true;
+                await rtdb.ref().update(updates);
+            }
+            catch {
+                // Best-effort — if this fails (e.g. offline), the index
+                // stays incomplete for now and the list view falls back to
+                // whatever's already in recipe-index/ until it can retry on
+                // a future load.
+            }
+        })();
+        const indexRef = uref("recipe-index");
+        const indexCallback = (snapshot) => {
             const val = snapshot.val();
             const list = val ? Object.values(val).sort((a, b) => (b.savedAt || "").localeCompare(a.savedAt || "")) : [];
             setRecipes(list);
             setLoaded(true);
-            try {
-                localStorage.setItem("recipes", JSON.stringify(list));
-            }
-            catch {
+            storage.set("recipes", JSON.stringify(list)).catch(() => {
                 // ignore — cache is best-effort
-            }
+            });
         };
-        recipesRef.on("value", recipesCallback, () => {
+        indexRef.on("value", indexCallback, () => {
             // Firebase unreachable — fall back to whatever was cached locally
             setLoaded(true);
         });
         return () => {
-            recipesRef.off("value", recipesCallback);
+            indexRef.off("value", indexCallback);
         };
     }, []);
+    // The list above only carries the lightweight recipe-index summary —
+    // ingredients/steps/memo/servings/sourceUrl live only in the full
+    // recipes/{id} record, fetched here on demand for whichever single
+    // recipe is actually open (detail view or editing), not for the whole
+    // list. `.on` (not `.once`) so an edit saved elsewhere for the same
+    // recipe is reflected immediately while it's open.
+    const [fullRecipe, setFullRecipe] = useState(null);
+    const [fullRecipeLoading, setFullRecipeLoading] = useState(false);
+    useEffect(() => {
+        if (!selectedId || (view !== "detail" && view !== "editRecipe")) {
+            return;
+        }
+        setFullRecipeLoading(true);
+        const ref = uref(`recipes/${selectedId}`);
+        const cb = (snap) => {
+            setFullRecipe(snap.val());
+            setFullRecipeLoading(false);
+        };
+        ref.on("value", cb, () => setFullRecipeLoading(false));
+        return () => ref.off("value", cb);
+    }, [selectedId, view]);
     const [mealPlan, setMealPlan] = useState({}); // { "YYYY-MM-DD": { recipeId, title } }
     useEffect(() => {
         const planRef = uref("meal-plan");
@@ -1949,7 +2117,18 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
     }
     const writeRecipe = useCallback(async (recipe) => {
         try {
-            await uref(`recipes/${recipe.id}`).set(recipe);
+            // Two writes: the full record (ingredients/steps/etc — used only
+            // when a specific recipe is actually opened) and a lightweight
+            // summary in recipe-index/ (title, photo, category fields, and
+            // just ingredient *names* for search) that the list/filter/
+            // meal-plan views run on day to day. Splitting these is what
+            // keeps opening the app fast as the recipe count grows — before
+            // this, every list view fetched every recipe's full ingredients,
+            // steps, and photos just to show a title and thumbnail.
+            await Promise.all([
+                uref(`recipes/${recipe.id}`).set(recipe),
+                uref(`recipe-index/${recipe.id}`).set(buildRecipeIndexEntry(recipe)),
+            ]);
         }
         catch {
             setSaveError("保存に失敗しました(通信環境を確認してください)。");
@@ -1957,7 +2136,10 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
     }, []);
     const removeRecipeRemote = useCallback(async (id) => {
         try {
-            await uref(`recipes/${id}`).remove();
+            await Promise.all([
+                uref(`recipes/${id}`).remove(),
+                uref(`recipe-index/${id}`).remove(),
+            ]);
         }
         catch {
             setSaveError("削除に失敗しました(通信環境を確認してください)。");
@@ -2120,13 +2302,13 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
         let imageUrl2 = recipeData.imageUrl2 || "";
         let imageUrl3 = recipeData.imageUrl3 || "";
         if (imageUrl.startsWith("data:")) {
-            imageUrl = await recompressDataUrl(imageUrl, 600, 0.6).catch(() => imageUrl);
+            imageUrl = await recompressDataUrl(imageUrl, 450, 0.6).catch(() => imageUrl);
         }
         if (imageUrl2.startsWith("data:")) {
-            imageUrl2 = await recompressDataUrl(imageUrl2, 600, 0.6).catch(() => imageUrl2);
+            imageUrl2 = await recompressDataUrl(imageUrl2, 450, 0.6).catch(() => imageUrl2);
         }
         if (imageUrl3.startsWith("data:")) {
-            imageUrl3 = await recompressDataUrl(imageUrl3, 600, 0.6).catch(() => imageUrl3);
+            imageUrl3 = await recompressDataUrl(imageUrl3, 450, 0.6).catch(() => imageUrl3);
         }
         const newRecipe = {
             ...recipeData,
@@ -2319,8 +2501,24 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
         await removeRecipeRemote(id);
         setView("list");
     };
+    // Only ever a targeted update of the `favorite` field (in both
+    // recipes/ and recipe-index/), never a full-object overwrite via
+    // writeRecipe — `recipe` here is very often just the lightweight
+    // recipe-index summary (e.g. toggled from the list before the full
+    // record has ever been fetched), and writeRecipe(recipe) would
+    // silently wipe that recipe's ingredients/steps/memo/etc back down to
+    // nothing if it were missing from the object passed in.
     const toggleFavorite = async (recipe) => {
-        await writeRecipe({ ...recipe, favorite: !recipe.favorite });
+        const next = !recipe.favorite;
+        try {
+            await Promise.all([
+                uref(`recipes/${recipe.id}/favorite`).set(next),
+                uref(`recipe-index/${recipe.id}/favorite`).set(next),
+            ]);
+        }
+        catch {
+            setSaveError("保存に失敗しました(通信環境を確認してください)。");
+        }
     };
     const [confirmDelete, setConfirmDelete] = useState(false);
     const handleUpdateRecipe = async () => {
@@ -2383,7 +2581,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
                 r.meatType,
                 r.appliance,
                 ...(r.tags || []),
-                ...(r.ingredients || []).map((i) => i.name),
+                ...(r.ingredientNames || []),
             ]
                 .filter(Boolean)
                 .join(" ")
@@ -2393,7 +2591,13 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
     }, [recipes, query, categoryFilter, meatTypeFilter, noodleTypeFilter, vegTypeFilter, soupTypeFilter, applianceFilter, favoriteOnly]);
     const availableCategories = categoryOrder || DISH_CATEGORIES;
     const availableAppliances = applianceOrder || APPLIANCES;
+    // `selected` is the lightweight recipe-index summary (title, photo,
+    // category — always available instantly for the header/list). `full`
+    // merges in ingredients/steps/memo/etc once fullRecipe has loaded for
+    // this specific recipe; DetailView and the edit-init below need `full`,
+    // not `selected`, or they'd show/save an ingredients-less recipe.
     const selected = recipes.find((r) => r.id === selectedId);
+    const full = selected && fullRecipe && fullRecipe.id === selectedId ? { ...selected, ...fullRecipe } : selected;
     return (React.createElement("div", { style: {
             minHeight: "100vh",
             background: COLORS.paper,
@@ -2409,15 +2613,20 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
                 maxWidth: 520,
                 padding: "22px 18px 118px",
             } },
-            React.createElement(Header, { view: view, onBack: () => { setView(view === "detail" ? detailOrigin : "list"); setDetailOrigin("list"); resetAddForm(); setConfirmDelete(false); }, isFavorite: !!selected?.favorite, onToggleFavorite: () => selected && toggleFavorite(selected), onEdit: () => {
-                    if (!selected)
+            React.createElement(Header, { view: view, onBack: () => { setView(view === "detail" ? detailOrigin : "list"); setDetailOrigin("list"); resetAddForm(); setConfirmDelete(false); }, isFavorite: !!selected?.favorite, onToggleFavorite: () => selected && toggleFavorite(selected), editDisabled: fullRecipeLoading, onEdit: () => {
+                    // Guard against opening the editor before the full
+                    // record (ingredients/steps/etc — see the fullRecipe
+                    // fetch above) has actually loaded; editDisabled above
+                    // also greys out the button for the same reason, this
+                    // is just the belt-and-suspenders click guard.
+                    if (!full || fullRecipeLoading)
                         return;
                     // If only the 2nd photo slot is filled, shift it into the
                     // main slot so there's never an empty gap before a used one.
                     // Also guard against older/malformed records missing
                     // array fields entirely (e.g. an ingredients-less record
                     // from an earlier version) — DraftEditor assumes arrays.
-                    const normalized = { ...selected };
+                    const normalized = { ...full };
                     if (!Array.isArray(normalized.ingredients))
                         normalized.ingredients = [];
                     if (!Array.isArray(normalized.steps))
@@ -2437,7 +2646,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
             loaded && view === "list" && (React.createElement(ListView, { recipes: filtered, total: recipes.length, query: query, setQuery: setQuery, categoryFilter: categoryFilter, setCategoryFilter: setCategoryFilter, meatTypeFilter: meatTypeFilter, setMeatTypeFilter: setMeatTypeFilter, noodleTypeFilter: noodleTypeFilter, setNoodleTypeFilter: setNoodleTypeFilter, vegTypeFilter: vegTypeFilter, setVegTypeFilter: setVegTypeFilter, soupTypeFilter: soupTypeFilter, setSoupTypeFilter: setSoupTypeFilter, availableCategories: availableCategories, applianceFilter: applianceFilter, setApplianceFilter: setApplianceFilter, availableAppliances: availableAppliances, favoriteOnly: favoriteOnly, setFavoriteOnly: setFavoriteOnly, viewMode: viewMode, setViewMode: changeViewMode, onAdd: (mode = "url") => { setAddMode(mode); setView("add"); }, onSelect: (id) => { setSelectedId(id); setView("detail"); setConfirmDelete(false); }, onDeleteRecipe: handleDelete, notice: urlImportNotice, onDismissNotice: () => setUrlImportNotice("") })),
             loaded && view === "calendar" && (React.createElement(LazyCalendarView, { recipes: recipes, mealPlan: mealPlan, onAddEntry: addMealPlanEntry, onRemoveEntry: removeMealPlanEntry, onSetDayEntries: setMealPlanEntries, onBack: () => setView("list"), onSelectRecipe: (id) => { setSelectedId(id); setDetailOrigin("calendar"); setView("detail"); setConfirmDelete(false); }, initialMode: calendarMode, onModeChange: setCalendarMode })),
             loaded && view === "add" && (React.createElement(AddView, { inputUrl: inputUrl, setInputUrl: setInputUrl, inputText: inputText, setInputText: setInputText, extractError: extractError, onExtract: handleExtract, extracting: extracting, draft: draft, setDraft: setDraft, onSave: handleSaveDraft, onDiscard: () => setDraft(null), saveError: saveError, ocrRunning: ocrRunning, ocrProgress: ocrProgress, ocrError: ocrError, onScreenshots: handleScreenshots, urlImporting: urlImporting, urlImportError: urlImportError, onUrlImport: handleUrlImport, apiKey: apiKey, addMode: addMode, categoryOrder: categoryOrder, applianceOrder: applianceOrder })),
-            loaded && view === "detail" && selected && (React.createElement(DetailView, { recipe: selected, onAddToShoppingList: addToShoppingList })),
+            loaded && view === "detail" && selected && (React.createElement(DetailView, { recipe: full, loadingFull: fullRecipeLoading, onAddToShoppingList: addToShoppingList })),
             loaded && view === "editRecipe" && editDraft && (React.createElement(DraftEditor, { draft: editDraft, setDraft: setEditDraft, onSave: handleUpdateRecipe, onDiscard: () => {
                     setEditDraft(null);
                     setView("detail");
@@ -2453,7 +2662,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
         ::selection { background: ${COLORS.accent}55; }
       `)));
 }
-function Header({ view, onBack, isFavorite, onToggleFavorite, onEdit, confirmDelete, onArmDelete, onConfirmDelete, onCancelDelete }) {
+function Header({ view, onBack, isFavorite, onToggleFavorite, onEdit, editDisabled, confirmDelete, onArmDelete, onConfirmDelete, onCancelDelete }) {
     return (React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 22, minHeight: 48 } }, view !== "list" ? (React.createElement(React.Fragment, null,
         React.createElement("button", { onClick: onBack, style: {
                 background: "none",
@@ -2474,7 +2683,7 @@ function Header({ view, onBack, isFavorite, onToggleFavorite, onEdit, confirmDel
             React.createElement("button", { onClick: onCancelDelete, style: { border: `1px solid ${COLORS.line}`, background: "none", color: COLORS.inkSoft, borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" } }, "\u30AD\u30E3\u30F3\u30BB\u30EB"))) : (React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 4 } },
             React.createElement("button", { onClick: onToggleFavorite, "aria-label": "\u30D6\u30C3\u30AF\u30DE\u30FC\u30AF", style: { background: isFavorite ? `${COLORS.accent}22` : "none", border: "none", borderRadius: 8, padding: 8, cursor: "pointer", display: "flex" } },
                 React.createElement(Bookmark, { size: 19, color: isFavorite ? COLORS.accent : COLORS.inkSoft })),
-            React.createElement("button", { onClick: onEdit, "aria-label": "\u7DE8\u96C6", style: { background: "none", border: "none", padding: 8, cursor: "pointer", display: "flex" } },
+            React.createElement("button", { onClick: onEdit, disabled: editDisabled, "aria-label": "\u7DE8\u96C6", style: { background: "none", border: "none", padding: 8, cursor: editDisabled ? "default" : "pointer", display: "flex", opacity: editDisabled ? 0.4 : 1 } },
                 React.createElement(Edit2, { size: 18, color: COLORS.inkSoft })),
             React.createElement("button", { onClick: onArmDelete, "aria-label": "\u524A\u9664", style: { background: "none", border: "none", padding: 8, cursor: "pointer", display: "flex" } },
                 React.createElement(Trash2, { size: 18, color: COLORS.inkSoft }))))))) : (React.createElement(React.Fragment, null,
@@ -3676,7 +3885,7 @@ function GroupedIngredientList({ ingredients, ratio }) {
             React.createElement("span", null, ing.base),
             React.createElement("span", { style: { color: COLORS.inkSoft } }, scaleAmountText(ing.amount, ratio)))))))))));
 }
-function DetailView({ recipe, onAddToShoppingList }) {
+function DetailView({ recipe, loadingFull, onAddToShoppingList }) {
     const [addedToList, setAddedToList] = useState(false);
     const baseServings = useMemo(() => parseBaseServings(recipe.servings), [recipe.servings]);
     const [targetServings, setTargetServings] = useState(baseServings?.value || null);
@@ -3801,8 +4010,8 @@ function DetailView({ recipe, onAddToShoppingList }) {
             } },
             React.createElement(Link2, { size: 13 }),
             " \u5143\u306E\u6295\u7A3F\u3092\u898B\u308B")),
-        React.createElement(SectionBlock, { title: "\u6750\u6599" }, recipe.ingredients?.length ? (React.createElement(GroupedIngredientList, { ingredients: recipe.ingredients, ratio: ratio })) : (React.createElement("p", { style: { fontSize: 13, color: COLORS.inkSoft } }, "\u6750\u6599\u306E\u8A18\u8F09\u306A\u3057"))),
-        React.createElement(SectionBlock, { title: "\u624B\u9806" }, recipe.steps?.length ? (React.createElement("ol", { style: { margin: 0, paddingLeft: 20, display: "flex", flexDirection: "column", gap: 10 } }, recipe.steps.map((s, i) => (React.createElement("li", { key: i, style: { fontSize: 14, lineHeight: 1.7 } }, s))))) : (React.createElement("p", { style: { fontSize: 13, color: COLORS.inkSoft } }, "\u624B\u9806\u306E\u8A18\u8F09\u306A\u3057"))),
+        React.createElement(SectionBlock, { title: "\u6750\u6599" }, loadingFull ? (React.createElement("p", { style: { fontSize: 13, color: COLORS.inkSoft, display: "flex", alignItems: "center", gap: 6 } }, React.createElement(Loader2, { size: 14, className: "spin" }), "\u8AAD\u307F\u8FBC\u307F\u4E2D...")) : recipe.ingredients?.length ? (React.createElement(GroupedIngredientList, { ingredients: recipe.ingredients, ratio: ratio })) : (React.createElement("p", { style: { fontSize: 13, color: COLORS.inkSoft } }, "\u6750\u6599\u306E\u8A18\u8F09\u306A\u3057"))),
+        React.createElement(SectionBlock, { title: "\u624B\u9806" }, loadingFull ? (React.createElement("p", { style: { fontSize: 13, color: COLORS.inkSoft, display: "flex", alignItems: "center", gap: 6 } }, React.createElement(Loader2, { size: 14, className: "spin" }), "\u8AAD\u307F\u8FBC\u307F\u4E2D...")) : recipe.steps?.length ? (React.createElement("ol", { style: { margin: 0, paddingLeft: 20, display: "flex", flexDirection: "column", gap: 10 } }, recipe.steps.map((s, i) => (React.createElement("li", { key: i, style: { fontSize: 14, lineHeight: 1.7 } }, s))))) : (React.createElement("p", { style: { fontSize: 13, color: COLORS.inkSoft } }, "\u624B\u9806\u306E\u8A18\u8F09\u306A\u3057"))),
         recipe.memo && (React.createElement(SectionBlock, { title: "\u30E1\u30E2" },
             React.createElement("p", { style: { fontSize: 13.5, lineHeight: 1.7, margin: 0, color: COLORS.inkSoft } }, recipe.memo)))));
 }
@@ -4233,7 +4442,14 @@ function App() {
                 }
             });
             if (Object.keys(updates).length > 0) {
-                await Promise.all(Object.keys(updates).map((id) => uref(`recipes/${id}`).set(updates[id])));
+                // dishCategory/appliance are also carried in the lightweight
+                // recipe-index (see buildRecipeIndexEntry) — update both, or
+                // the list/filter views would keep showing the old value
+                // until each recipe happened to be individually re-saved.
+                await Promise.all(Object.keys(updates).flatMap((id) => [
+                    uref(`recipes/${id}`).set(updates[id]),
+                    uref(`recipe-index/${id}`).set(buildRecipeIndexEntry(updates[id])),
+                ]));
             }
         }
         catch {
@@ -4361,15 +4577,22 @@ function App() {
             try {
                 const patch = {};
                 if ((r.imageUrl || "").startsWith("data:")) {
-                    patch.imageUrl = await recompressDataUrl(r.imageUrl, 600, 0.6);
+                    patch.imageUrl = await recompressDataUrl(r.imageUrl, 450, 0.6);
                 }
                 if ((r.imageUrl2 || "").startsWith("data:")) {
-                    patch.imageUrl2 = await recompressDataUrl(r.imageUrl2, 600, 0.6);
+                    patch.imageUrl2 = await recompressDataUrl(r.imageUrl2, 450, 0.6);
                 }
                 if ((r.imageUrl3 || "").startsWith("data:")) {
-                    patch.imageUrl3 = await recompressDataUrl(r.imageUrl3, 600, 0.6);
+                    patch.imageUrl3 = await recompressDataUrl(r.imageUrl3, 450, 0.6);
                 }
-                await uref(`recipes/${r.id}`).update(patch);
+                await Promise.all([
+                    uref(`recipes/${r.id}`).update(patch),
+                    // imageUrl/imageUrl2/imageUrl3 also live in the
+                    // lightweight recipe-index (see buildRecipeIndexEntry) —
+                    // without this, the list/grid views would keep showing
+                    // the old, large photo even after this migration.
+                    uref(`recipe-index/${r.id}`).update(patch),
+                ]);
             }
             catch (e) {
                 // Leave this one's photo as-is (still works, just heavy) and
@@ -4408,7 +4631,7 @@ function App() {
                     try {
                         const entries = mealPlan[dateStr] || [];
                         const nextEntries = await Promise.all(entries.map(async (e) => (e.imageUrl || "").startsWith("data:")
-                            ? { ...e, imageUrl: await recompressDataUrl(e.imageUrl, 600, 0.6).catch(() => e.imageUrl) }
+                            ? { ...e, imageUrl: await recompressDataUrl(e.imageUrl, 450, 0.6).catch(() => e.imageUrl) }
                             : e));
                         await uref(`meal-plan/${dateStr}`).set(nextEntries);
                     }

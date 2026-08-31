@@ -124,7 +124,7 @@ export function PhotoPositionEditor({ file, source, onCancel, onConfirm }) {
         // gets re-fetched on every app launch. A recipe thumbnail doesn't
         // need to be much bigger than it's ever displayed at, so this
         // trades a little image quality for a much lighter app.
-        const outW = 600, outH = Math.round(outW * (cropH / cropW));
+        const outW = 450, outH = Math.round(outW * (cropH / cropW));
         const canvas = document.createElement("canvas");
         canvas.width = outW;
         canvas.height = outH;
