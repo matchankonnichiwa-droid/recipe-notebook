@@ -3889,6 +3889,18 @@ function DetailView({ recipe, loadingFull, onAddToShoppingList }) {
     const [addedToList, setAddedToList] = useState(false);
     const baseServings = useMemo(() => parseBaseServings(recipe.servings), [recipe.servings]);
     const [targetServings, setTargetServings] = useState(baseServings?.value || null);
+    // `recipe.servings` isn't available until the full record loads (see
+    // the fullRecipe fetch in RecipeNotebook) — DetailView can now mount
+    // before that happens, with recipe.servings briefly undefined, so the
+    // useState initializer above only ever ran once against that empty
+    // value. Sync targetServings in whenever baseServings first becomes
+    // available; the `== null` check means this never overwrites an
+    // adjustment the person has actually made themselves.
+    useEffect(() => {
+        if (baseServings && targetServings == null) {
+            setTargetServings(baseServings.value);
+        }
+    }, [baseServings]);
     const ratio = baseServings && targetServings ? targetServings / baseServings.value : 1;
     const handleAddToShoppingList = () => {
         const scaledIngredients = (recipe.ingredients || []).map((ing) => ({
