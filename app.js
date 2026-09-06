@@ -1056,6 +1056,67 @@ function fileToColorDataUrl(file, maxDimension, rotationDeg) {
         img.src = URL.createObjectURL(file);
     });
 }
+// Extracts the 11-character video ID from either a youtu.be/ID or
+// youtube.com/watch?v=ID style URL.
+function extractYouTubeVideoId(url) {
+    const short = url.match(/youtu\.be\/([\w-]{11})/);
+    if (short)
+        return short[1];
+    const long = url.match(/[?&]v=([\w-]{11})/);
+    if (long)
+        return long[1];
+    return null;
+}
+// YouTube's caption track (the actual spoken/subtitled dialogue — often the
+// only place a cooking video's full ingredient list and steps are written
+// down, since the description frequently just links out or gives a short
+// blurb) isn't reachable with a normal browser fetch: youtube.com doesn't
+// send CORS headers on this endpoint, so a direct cross-origin request gets
+// blocked before it ever reaches our code. Routing it through the same
+// Jina Reader proxy already used for page fetches sidesteps that, since
+// Jina's own server (not the browser) is what actually talks to YouTube —
+// CORS only restricts browser-to-server requests, not server-to-server
+// ones. This is somewhat experimental: Jina is built for rendering
+// webpages, not raw XML caption tracks, so the response format here isn't
+// as predictable as a normal page fetch. Returns "" (never throws) on any
+// failure, so callers can fall back to the regular description-based fetch
+// without special-casing this.
+async function fetchYouTubeCaptions(videoId, jinaApiKey) {
+    for (const lang of ["ja", "en"]) {
+        try {
+            const target = `https://www.youtube.com/api/timedtext?v=${videoId}&lang=${lang}`;
+            const headers = {};
+            if (jinaApiKey)
+                headers["Authorization"] = `Bearer ${jinaApiKey}`;
+            const res = await fetch(`https://r.jina.ai/${target}`, { headers });
+            if (!res.ok)
+                continue;
+            const raw = await res.text();
+            // Caption tracks come back as a run of <text ...>line</text>
+            // elements (or occasionally that same structure still wrapped
+            // in Jina's own markdown framing) — strip all tags, decode the
+            // handful of entities that show up in captions, and join into
+            // plain text for the extraction prompt below.
+            const text = raw
+                .replace(/<[^>]+>/g, "\n")
+                .replace(/&amp;/g, "&")
+                .replace(/&#39;/g, "'")
+                .replace(/&quot;/g, "\"")
+                .replace(/&gt;/g, ">")
+                .replace(/&lt;/g, "<")
+                .split("\n")
+                .map((l) => l.trim())
+                .filter(Boolean)
+                .join("\n");
+            if (text.length > 50)
+                return text;
+        }
+        catch {
+            // try the next language, or fall through to the caller's fallback
+        }
+    }
+    return "";
+}
 async function fetchPageText(url, jinaApiKey) {
     const readerUrl = `https://r.jina.ai/${url}`;
     const headers = {};
@@ -2410,20 +2471,33 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
             const pageText = stripInstagramWidgetNoise(await fetchPageText(url, jinaApiKey));
             const imageUrl = extractHeroImageUrl(pageText);
             const pageTitle = extractPageTitle(pageText);
+            // YouTube descriptions are often just a short blurb/links, and
+            // the caption track sometimes lacks a written ingredients list
+            // even when it has the spoken steps (or vice versa) — combine
+            // both into one extraction pass rather than picking only one,
+            // so whichever source has the missing half still contributes.
+            const videoId = extractYouTubeVideoId(url);
+            let extractionSource = pageText;
+            if (videoId) {
+                const captions = await fetchYouTubeCaptions(videoId, jinaApiKey);
+                if (captions) {
+                    extractionSource = `${pageText}\n\n${captions}`;
+                }
+            }
             let structuredList;
             let usedClaude = false;
             if (apiKey) {
                 try {
-                    structuredList = await extractWithClaude(pageText, apiKey);
+                    structuredList = await extractWithClaude(extractionSource, apiKey);
                     usedClaude = true;
                 }
                 catch {
                     // fall back to local parsing rather than failing outright
-                    structuredList = [parseCaptionHeuristic(pageText)];
+                    structuredList = [parseCaptionHeuristic(extractionSource)];
                 }
             }
             else {
-                structuredList = [parseCaptionHeuristic(pageText)];
+                structuredList = [parseCaptionHeuristic(extractionSource)];
             }
             // Always create the record(s) immediately on a successful fetch —
             // never block on a review screen. Most pages have exactly one
