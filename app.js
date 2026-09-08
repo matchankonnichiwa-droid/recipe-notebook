@@ -797,9 +797,21 @@ function parseCaptionHeuristic(rawText) {
     let currentGroup = null;
     let currentStep = "";
     let inSteps = false;
+    // Instagram recipe posts often end the real instructions and then run
+    // straight into a promotional sign-off (thanks-for-watching, "follow
+    // for more", asking for likes/comments, decorative divider characters)
+    // with no line break separating the two — so it lands glued onto the
+    // end of the last step's text instead of getting filtered as its own
+    // noise line. Truncate a step's text at the first such marker found.
+    const STEP_CTA_MARKER = /(最後まで見てくれてありがとう|このアカウントは|フォローしてね|コメントや?DM|いいねを?押し|保存して|見てくれてありがとう|[✂♧✧⋆].{0,3}[-.]{3,})/;
+    const stripStepCallToAction = (text) => {
+        const m = text.match(STEP_CTA_MARKER);
+        return m ? text.slice(0, m.index).trim() : text;
+    };
     const flushStep = () => {
-        if (currentStep.trim())
-            steps.push(currentStep.trim());
+        const cleaned = stripStepCallToAction(currentStep.trim());
+        if (cleaned)
+            steps.push(cleaned);
         currentStep = "";
     };
     const SNS_FOOTER_MARKER = /Log\s*in\s*to\s*like\s*or\s*comment|More\s*posts\s*from|VerifiedEnglish|InstagramfromMeta|©\s*20\d\d\s*Instagram|栄養成分|投稿は許可をいただいて/i;
