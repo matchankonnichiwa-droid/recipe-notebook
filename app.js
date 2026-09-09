@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createRoot } from "react-dom/client";
-import { FiPlus as Plus, FiSearch as Search, FiInstagram as Instagram, FiLink2 as Link2, FiTrash2 as Trash2, FiChevronLeft as ChevronLeft, FiChevronDown as ChevronDown, FiLoader as Loader2, FiClipboard as ClipboardPaste, FiX as X, FiCheck as Check, FiAlertCircle as AlertCircle, FiBookOpen as BookOpen, FiCamera as Camera, FiMinus as Minus, FiRotateCcw as RotateCcw, FiRepeat as Repeat, FiEdit2 as Edit2, FiSettings as Settings, FiBookmark as Bookmark, FiGrid as GridIcon, FiList as ListIcon, FiCalendar as CalendarIcon, FiArrowUp as ArrowUp, } from "react-icons/fi";
+import { FiPlus as Plus, FiSearch as Search, FiInstagram as Instagram, FiLink2 as Link2, FiTrash2 as Trash2, FiChevronLeft as ChevronLeft, FiChevronDown as ChevronDown, FiLoader as Loader2, FiClipboard as ClipboardPaste, FiX as X, FiCheck as Check, FiAlertCircle as AlertCircle, FiBookOpen as BookOpen, FiCamera as Camera, FiMinus as Minus, FiRotateCcw as RotateCcw, FiRepeat as Repeat, FiEdit2 as Edit2, FiSettings as Settings, FiBookmark as Bookmark, FiGrid as GridIcon, FiList as ListIcon, FiCalendar as CalendarIcon, FiArrowUp as ArrowUp, FiFileText as FileText, } from "react-icons/fi";
 // tesseract.js is a large OCR library (WASM engine + language data) that's
 // only needed for the "screenshot" recipe-import path. Importing it
 // statically here would force every app launch to download and parse it
@@ -3192,6 +3192,23 @@ function LazyCalendarView(props) {
     }
     return React.createElement(Comp, props);
 }
+// Same on-demand loading as LazyCalendarView, for the プリント (school/PTA
+// paper photos) tab — its own file, prints.js.
+function LazyPrintsView(props) {
+    const [Comp, setComp] = useState(null);
+    useEffect(() => {
+        let cancelled = false;
+        import("./prints.js").then((m) => {
+            if (!cancelled)
+                setComp(() => m.PrintsView);
+        });
+        return () => { cancelled = true; };
+    }, []);
+    if (!Comp) {
+        return React.createElement("div", { style: { padding: "60px 20px", textAlign: "center", color: COLORS.inkSoft, fontSize: 13.5 } }, "\u8AAD\u307F\u8FBC\u307F\u4E2D\u2026");
+    }
+    return React.createElement(Comp, props);
+}
 function EmptyState({ onAdd }) {
     return (React.createElement("div", { style: {
             textAlign: "center",
@@ -4350,6 +4367,101 @@ function App() {
     const [applianceOrder, setApplianceOrder] = useState(APPLIANCES);
     const [newApplianceDraft, setNewApplianceDraft] = useState("");
     const [editingApplianceIndex, setEditingApplianceIndex] = useState(null);
+    // ---- プリント管理 (school/PTA paper photos, shared between family
+    // members so the physical paper can be thrown away) ----
+    const [printPeople, setPrintPeople] = useState([]);
+    const [printIndex, setPrintIndex] = useState([]);
+    const [printsLoaded, setPrintsLoaded] = useState(false);
+    const [printSaveError, setPrintSaveError] = useState("");
+    useEffect(() => {
+        const peopleRef = uref("print-people");
+        const peopleCb = peopleRef.on("value", (snap) => {
+            setPrintPeople(snap.val() || []);
+        });
+        const idxRef = uref("print-index");
+        const idxCb = idxRef.on("value", (snap) => {
+            const val = snap.val();
+            const list = val ? Object.values(val).sort((a, b) => (b.date || "").localeCompare(a.date || "")) : [];
+            setPrintIndex(list);
+            setPrintsLoaded(true);
+        }, () => setPrintsLoaded(true));
+        return () => {
+            peopleRef.off("value", peopleCb);
+            idxRef.off("value", idxCb);
+        };
+    }, []);
+    function buildPrintIndexEntry(print) {
+        // Same lightweight-index idea as recipes: the list only needs a
+        // small thumbnail, not all (up to 10) full-resolution photos —
+        // those are fetched from prints/{id} only once a specific entry is
+        // actually opened.
+        return {
+            id: print.id,
+            title: print.title || "",
+            date: print.date || "",
+            status: print.status || "pending",
+            personTags: print.personTags || [],
+            photoCount: (print.photos || []).length,
+            thumbnailUrl: (print.photos || [])[0] || "",
+        };
+    }
+    async function savePrint(printData) {
+        const id = printData.id || `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+        // Photos come in already full-quality (compressed in prints.js at
+        // capture time to keep text legible) — the index just needs a much
+        // smaller copy of the first one for the thumbnail.
+        const thumbnailUrl = printData.photos?.[0]
+            ? await recompressDataUrl(printData.photos[0], 200, 0.5).catch(() => printData.photos[0])
+            : "";
+        const full = { ...printData, id };
+        const indexEntry = { ...buildPrintIndexEntry(full), thumbnailUrl };
+        try {
+            await Promise.all([
+                uref(`prints/${id}`).set(full),
+                uref(`print-index/${id}`).set(indexEntry),
+            ]);
+        }
+        catch {
+            setPrintSaveError("保存に失敗しました(通信環境を確認してください)。");
+        }
+        return full;
+    }
+    async function deletePrint(id) {
+        try {
+            await Promise.all([
+                uref(`prints/${id}`).remove(),
+                uref(`print-index/${id}`).remove(),
+            ]);
+        }
+        catch {
+            setPrintSaveError("削除に失敗しました(通信環境を確認してください)。");
+        }
+    }
+    async function togglePrintStatus(id, currentStatus) {
+        const next = currentStatus === "done" ? "pending" : "done";
+        try {
+            await Promise.all([
+                uref(`prints/${id}/status`).set(next),
+                uref(`print-index/${id}/status`).set(next),
+            ]);
+        }
+        catch {
+            setPrintSaveError("保存に失敗しました(通信環境を確認してください)。");
+        }
+    }
+    function addPrintPerson(name) {
+        const trimmed = name.trim();
+        if (!trimmed || printPeople.includes(trimmed))
+            return;
+        const next = [...printPeople, trimmed];
+        setPrintPeople(next);
+        uref("print-people").set(next);
+    }
+    function deletePrintPerson(name) {
+        const next = printPeople.filter((p) => p !== name);
+        setPrintPeople(next);
+        uref("print-people").set(next);
+    }
     const [editingApplianceName, setEditingApplianceName] = useState("");
     useEffect(() => {
         const n = local.get("myName");
@@ -4791,6 +4903,11 @@ function App() {
                     display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
                     fontSize: 10.5, fontWeight: 700, color: mode === "shopping" ? COLORS.accent : COLORS.inkSoft,
                 } }, React.createElement(ClipboardPaste, { size: 21 }), "買い物"),
+            React.createElement("button", { onClick: () => switchMode("prints"), style: {
+                    flex: 1, border: "none", background: "none", padding: "7px 0 5px",
+                    display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+                    fontSize: 10.5, fontWeight: 700, color: mode === "prints" ? COLORS.accent : COLORS.inkSoft,
+                } }, React.createElement(FileText, { size: 21 }), "プリント"),
             React.createElement("button", { onClick: () => setShowSettings(true), title: "設定", "aria-label": "設定", style: {
                     flex: 1, border: "none", background: "none", padding: "7px 0 5px",
                     display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
@@ -4798,7 +4915,8 @@ function App() {
                 } }, React.createElement(Settings, { size: 21 }), "設定")),
         React.createElement("div", { style: { flex: 1, minHeight: 0, overflowY: "auto", paddingBottom: "calc(70px + env(safe-area-inset-bottom, 0px))", background: COLORS.paper } },
             mode === "recipe" && React.createElement(RecipeNotebook, { key: recipeHomeToken, initialView: recipeInitialView, apiKey: apiKey, jinaApiKey: jinaApiKey, categoryOrder: categoryOrder, applianceOrder: applianceOrder }),
-            mode === "shopping" && React.createElement(TodoApp, { listKey: "shopping", myName: myName, ungroupedLabel: ungroupedLabels.shopping })),
+            mode === "shopping" && React.createElement(TodoApp, { listKey: "shopping", myName: myName, ungroupedLabel: ungroupedLabels.shopping }),
+            mode === "prints" && React.createElement(LazyPrintsView, { printIndex: printIndex, printsLoaded: printsLoaded, printPeople: printPeople, saveError: printSaveError, onSave: savePrint, onDelete: deletePrint, onToggleStatus: togglePrintStatus, onAddPerson: addPrintPerson, uref: uref })),
         showSettings && React.createElement(SettingsPanel, {
             onClose: () => setShowSettings(false),
             myName: myName,
