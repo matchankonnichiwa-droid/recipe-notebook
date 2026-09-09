@@ -25,7 +25,12 @@ const MAX_PHOTOS = 10;
 // Compresses a photographed document to a size that keeps small print
 // legible — much higher quality than the ~450px thumbnails used for recipe
 // dish photos elsewhere in this app, since here the photo *is* the record
-// (there's no separate text extraction step to fall back on).
+// (there's no separate text extraction step to fall back on). Also returns
+// a much smaller `thumb` version for display while editing: rendering the
+// full 1400px original at a tiny 84x84 size for every photo in the form
+// forced the browser to decode several large images at once on every
+// re-render, which is what made the whole screen (including the back
+// button) stop responding after adding a few photos.
 function fileToDocumentPhoto(file) {
     return new Promise((resolve, reject) => {
         const img = new Image();
@@ -37,7 +42,14 @@ function fileToDocumentPhoto(file) {
             canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
             const ctx = canvas.getContext("2d");
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            resolve(canvas.toDataURL("image/jpeg", 0.85));
+            const full = canvas.toDataURL("image/jpeg", 0.85);
+            const thumbScale = Math.min(1, 160 / Math.max(img.naturalWidth, img.naturalHeight));
+            const thumbCanvas = document.createElement("canvas");
+            thumbCanvas.width = Math.max(1, Math.round(img.naturalWidth * thumbScale));
+            thumbCanvas.height = Math.max(1, Math.round(img.naturalHeight * thumbScale));
+            thumbCanvas.getContext("2d").drawImage(img, 0, 0, thumbCanvas.width, thumbCanvas.height);
+            const thumb = thumbCanvas.toDataURL("image/jpeg", 0.6);
+            resolve({ full, thumb });
         };
         img.onerror = reject;
         img.src = URL.createObjectURL(file);
@@ -135,10 +147,16 @@ function PrintForm({ initial, printPeople, onSave, onCancel, onAddPerson, saveEr
     const [title, setTitle] = useState(initial?.title || "");
     const [date, setDate] = useState(initial?.date || new Date().toISOString().slice(0, 10));
     const [personTags, setPersonTags] = useState(initial?.personTags || []);
-    const [photos, setPhotos] = useState(initial?.photos || []);
+    // Each entry is { full, thumb } — thumb is what's actually rendered in
+    // this form (see fileToDocumentPhoto), full is only used at save time.
+    // Existing photos (plain strings, from before this fix) are wrapped
+    // with thumb === full; they'll still render a bit heavier until
+    // re-saved, but that's a one-time cost rather than a permanent one.
+    const [photos, setPhotos] = useState((initial?.photos || []).map((url) => ({ full: url, thumb: url })));
     const [newPersonDraft, setNewPersonDraft] = useState("");
     const [addingPerson, setAddingPerson] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [processingCount, setProcessingCount] = useState(0);
     const togglePerson = (name) => {
         setPersonTags((prev) => prev.includes(name) ? prev.filter((p) => p !== name) : [...prev, name]);
     };
@@ -146,12 +164,28 @@ function PrintForm({ initial, printPeople, onSave, onCancel, onAddPerson, saveEr
         const files = Array.from(fileList || []).slice(0, MAX_PHOTOS - photos.length);
         if (files.length === 0)
             return;
-        const compressed = await Promise.all(files.map((f) => fileToDocumentPhoto(f).catch(() => null)));
-        setPhotos((prev) => [...prev, ...compressed.filter(Boolean)]);
+        // Processed one at a time (not all via Promise.all at once), with a
+        // brief yield between each, rather than compressing every selected
+        // photo back-to-back in one long synchronous burst — several large
+        // photos processed together like that was what made the screen
+        // (including the back button) stop responding until it finished.
+        setProcessingCount(files.length);
+        for (const file of files) {
+            try {
+                const pair = await fileToDocumentPhoto(file);
+                setPhotos((prev) => [...prev, pair]);
+            }
+            catch {
+                // skip a photo that failed to load rather than aborting the
+                // whole batch
+            }
+            setProcessingCount((n) => n - 1);
+            await new Promise((r) => setTimeout(r, 0));
+        }
     };
     const handleSave = async () => {
         setSaving(true);
-        await onSave({ ...(initial || {}), title: title.trim() || "無題のプリント", date, personTags, photos });
+        await onSave({ ...(initial || {}), title: title.trim() || "無題のプリント", date, personTags, photos: photos.map((p) => p.full) });
         setSaving(false);
     };
     return React.createElement("div", { style: { padding: "16px 16px 100px" } },
@@ -193,8 +227,8 @@ function PrintForm({ initial, printPeople, onSave, onCancel, onAddPerson, saveEr
                         border: `1.5px dashed ${COLORS.line}`, background: "none", color: COLORS.inkSoft, cursor: "pointer",
                     } }, React.createElement(Plus, { size: 13 }), "追加")),
         React.createElement("label", { style: { display: "block", fontSize: 12, fontWeight: 700, color: COLORS.inkSoft, margin: "0 0 6px" } }, `写真(最大${MAX_PHOTOS}枚・文字が読める画質で保存)`),
-        React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 24 } },
-            photos.map((url, i) => React.createElement(PhotoThumb, { key: i, url: url, onRemove: () => setPhotos((prev) => prev.filter((_, idx) => idx !== i)) })),
+        React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 } },
+            photos.map((p, i) => React.createElement(PhotoThumb, { key: i, url: p.thumb, onRemove: () => setPhotos((prev) => prev.filter((_, idx) => idx !== i)) })),
             photos.length < MAX_PHOTOS && React.createElement("label", { style: {
                     width: 84, height: 84, borderRadius: 10, border: `1.5px dashed ${COLORS.accent}`,
                     display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "pointer", gap: 4,
@@ -205,6 +239,8 @@ function PrintForm({ initial, printPeople, onSave, onCancel, onAddPerson, saveEr
                         handleFiles(e.target.files);
                         e.target.value = "";
                     } }))),
+        processingCount > 0 && React.createElement("p", { style: { fontSize: 12, color: COLORS.inkSoft, marginBottom: 16 } }, `処理中… 残り${processingCount}枚`),
+        processingCount === 0 && React.createElement("div", { style: { marginBottom: 16 } }),
         React.createElement("button", { onClick: handleSave, disabled: saving, style: {
                 width: "100%", background: COLORS.accent, color: "#fff", border: "none", borderRadius: 12,
                 padding: "14px 0", fontWeight: 700, fontSize: 15, cursor: saving ? "default" : "pointer", opacity: saving ? 0.6 : 1,
@@ -213,6 +249,7 @@ function PrintForm({ initial, printPeople, onSave, onCancel, onAddPerson, saveEr
 
 function PhotoViewer({ photos, startIndex, onClose }) {
     const scrollRef = useRef(null);
+    const [currentIndex, setCurrentIndex] = useState(startIndex);
     useEffect(() => {
         // Jump straight to the tapped photo — scrollIntoView with an
         // instant (not smooth) behavior avoids a distracting animated
@@ -221,7 +258,18 @@ function PhotoViewer({ photos, startIndex, onClose }) {
         if (el) {
             el.scrollLeft = startIndex * el.clientWidth;
         }
+        setCurrentIndex(startIndex);
     }, [startIndex]);
+    // The page counter below used to just print the index the viewer was
+    // opened at and never update — swiping to a different photo moved the
+    // scroll position but nothing was watching it, so the number stayed
+    // frozen. Recompute which photo is centered whenever the strip scrolls.
+    const handleScroll = () => {
+        const el = scrollRef.current;
+        if (el && el.clientWidth > 0) {
+            setCurrentIndex(Math.round(el.scrollLeft / el.clientWidth));
+        }
+    };
     return React.createElement("div", { style: {
             position: "fixed", inset: 0, background: "rgba(20,22,18,0.94)", zIndex: 100,
         } },
@@ -234,7 +282,7 @@ function PhotoViewer({ photos, startIndex, onClose }) {
         // A plain horizontally-scrolling, scroll-snapped strip — swiping
         // (or scrolling two-finger on a trackpad) moves to the next/
         // previous photo natively, no custom gesture code needed.
-        React.createElement("div", { ref: scrollRef, style: {
+        React.createElement("div", { ref: scrollRef, onScroll: handleScroll, style: {
                 display: "flex",
                 width: "100%",
                 height: "100%",
@@ -255,7 +303,7 @@ function PhotoViewer({ photos, startIndex, onClose }) {
         photos.length > 1 && React.createElement("div", { style: {
                 position: "absolute", bottom: "calc(16px + env(safe-area-inset-bottom, 0px))", left: 0, right: 0,
                 textAlign: "center", color: "rgba(255,255,255,0.7)", fontSize: 12.5, fontWeight: 700,
-            } }, `${startIndex + 1} / ${photos.length}`));
+            } }, `${currentIndex + 1} / ${photos.length}`));
 }
 
 function PrintDetailView({ print, onBack, onEdit, onDelete }) {
