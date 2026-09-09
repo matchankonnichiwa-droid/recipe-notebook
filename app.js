@@ -2753,7 +2753,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
                 }, confirmDelete: confirmDelete, onArmDelete: () => setConfirmDelete(true), onConfirmDelete: () => selected && handleDelete(selected.id), onCancelDelete: () => setConfirmDelete(false) }),
             !loaded && (React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, color: COLORS.inkSoft, padding: 24 } },
                 React.createElement(Loader2, { size: 18, className: "spin" }),
-                React.createElement("span", null, "\u8AAD\u307F\u8FBC\u307F\u4E2D..."))),
+                React.createElement("span", null, "読み込み中..."))),
             loaded && view === "list" && (React.createElement(ListView, { recipes: filtered, total: recipes.length, query: query, setQuery: setQuery, categoryFilter: categoryFilter, setCategoryFilter: setCategoryFilter, meatTypeFilter: meatTypeFilter, setMeatTypeFilter: setMeatTypeFilter, noodleTypeFilter: noodleTypeFilter, setNoodleTypeFilter: setNoodleTypeFilter, vegTypeFilter: vegTypeFilter, setVegTypeFilter: setVegTypeFilter, soupTypeFilter: soupTypeFilter, setSoupTypeFilter: setSoupTypeFilter, availableCategories: availableCategories, applianceFilter: applianceFilter, setApplianceFilter: setApplianceFilter, availableAppliances: availableAppliances, favoriteOnly: favoriteOnly, setFavoriteOnly: setFavoriteOnly, viewMode: viewMode, setViewMode: changeViewMode, onAdd: (mode = "url") => { setAddMode(mode); setView("add"); }, onSelect: (id) => { setSelectedId(id); setView("detail"); setConfirmDelete(false); }, onDeleteRecipe: handleDelete, notice: urlImportNotice, onDismissNotice: () => setUrlImportNotice("") })),
             loaded && view === "calendar" && (React.createElement(LazyCalendarView, { recipes: recipes, mealPlan: mealPlan, onAddEntry: addMealPlanEntry, onRemoveEntry: removeMealPlanEntry, onSetDayEntries: setMealPlanEntries, onBack: () => setView("list"), onSelectRecipe: (id) => { setSelectedId(id); setDetailOrigin("calendar"); setView("detail"); setConfirmDelete(false); }, initialMode: calendarMode, onModeChange: setCalendarMode })),
             loaded && view === "add" && (React.createElement(AddView, { inputUrl: inputUrl, setInputUrl: setInputUrl, inputText: inputText, setInputText: setInputText, extractError: extractError, onExtract: handleExtract, extracting: extracting, draft: draft, setDraft: setDraft, onSave: handleSaveDraft, onDiscard: () => setDraft(null), saveError: saveError, ocrRunning: ocrRunning, ocrProgress: ocrProgress, ocrError: ocrError, onScreenshots: handleScreenshots, urlImporting: urlImporting, urlImportError: urlImportError, onUrlImport: handleUrlImport, apiKey: apiKey, addMode: addMode, categoryOrder: categoryOrder, applianceOrder: applianceOrder })),
@@ -2764,6 +2764,13 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
                 }, saveError: saveError, mode: "edit", categoryOrder: categoryOrder, applianceOrder: applianceOrder }))),
         React.createElement("style", null, `
         .spin { animation: spin 1s linear infinite; }
+        .skeleton-shimmer { position: relative; overflow: hidden; }
+        .skeleton-shimmer::after {
+          content: ""; position: absolute; inset: 0;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent);
+          animation: shimmer 1.4s infinite;
+        }
+        @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         input, textarea { font-family: inherit; }
         button { font-family: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
@@ -4245,9 +4252,9 @@ function SettingsPanel({
     printPeople, addPrintPerson, deletePrintPerson, newPrintPersonDraft, setNewPrintPersonDraft,
 }) {
     const [openSection, setOpenSection] = useState(null);
-    const card = { background:"#fff", border:`1px solid ${COLORS.line}`, borderRadius:20, overflow:"hidden", marginBottom:14, boxShadow:"0 2px 12px rgba(45,42,36,.035)" };
-    const row = { width:"100%", border:"none", background:"#fff", display:"flex", alignItems:"center", gap:14, padding:"17px 16px", textAlign:"left", color:COLORS.ink };
-    const icon = { width:38, height:38, borderRadius:13, display:"grid", placeItems:"center", background:COLORS.sageSoft, color:COLORS.accent, flexShrink:0, fontSize:18, fontWeight:800 };
+    const card = { background:COLORS.paperCard, border:`1px solid ${COLORS.line}`, borderRadius:RADIUS.card, overflow:"hidden", marginBottom:14, boxShadow:SHADOW.soft };
+    const row = { width:"100%", border:"none", background:COLORS.paperCard, display:"flex", alignItems:"center", gap:14, padding:"17px 16px", textAlign:"left", color:COLORS.ink };
+    const icon = { width:40, height:40, borderRadius:RADIUS.button, display:"grid", placeItems:"center", background:COLORS.sageSoft, color:COLORS.sage, flexShrink:0, fontSize:18, fontWeight:800 };
     const title = { fontSize:15.5, fontWeight:750, margin:0 };
     const sub = { fontSize:11.5, color:COLORS.inkSoft, margin:"3px 0 0", lineHeight:1.45 };
     const divider = { height:1, background:COLORS.line, marginLeft:68 };
