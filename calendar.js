@@ -26,6 +26,8 @@ const COLORS = {
     accentSoft: "#E7EEE5",
     chipBg: "#F4F0E8",
 };
+const RADIUS = { card: 22, cardSmall: 17, button: 16, input: 15, chip: 999, image: 20 };
+const SHADOW = { soft: "0 2px 12px rgba(65,55,45,0.05)", lifted: "0 5px 24px rgba(65,55,45,0.08)" };
 const MAIN_CATEGORIES = ["ご飯もの", "肉料理", "魚介料理", "麺類"];
 const SIDE_CATEGORIES = ["野菜料理"];
 const SOUP_CATEGORIES = ["スープ・鍋"];

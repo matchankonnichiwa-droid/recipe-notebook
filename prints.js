@@ -28,6 +28,8 @@ const COLORS = {
     chipBg: "#F4F0E8",
 };
 const MAX_PHOTOS = 10;
+const RADIUS = { card: 22, cardSmall: 17, button: 16, input: 15, chip: 999, image: 20 };
+const SHADOW = { soft: "0 2px 12px rgba(65,55,45,0.05)", lifted: "0 5px 24px rgba(65,55,45,0.08)" };
 
 // Compresses a photographed document to a size that keeps small print
 // legible — much higher quality than the ~450px thumbnails used for recipe
@@ -65,7 +67,7 @@ function fileToDocumentPhoto(file) {
 
 function PrintListCard({ print, onOpen, onDelete }) {
     return React.createElement("div", { style: {
-            position: "relative", background: "#fff", borderRadius: 14,
+            position: "relative", background: "#fff", borderRadius: RADIUS.cardSmall,
             border: `1px solid ${COLORS.line}`, padding: 10, display: "flex", gap: 10,
             alignItems: "center", marginBottom: 10, cursor: "pointer",
         }, onClick: () => onOpen(print.id) },
