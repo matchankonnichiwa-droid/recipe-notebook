@@ -2859,9 +2859,6 @@ function ListView({ recipes, total, query, setQuery, categoryFilter, setCategory
         { label: "手動で入力", icon: Edit2, mode: "manual" },
     ];
     return (React.createElement("div", { style: { paddingBottom: 24 } },
-        React.createElement("div", { style: { marginBottom: 16 } },
-            React.createElement("p", { style: { fontSize: 10.5, fontWeight: 800, letterSpacing: "0.12em", color: COLORS.sage, margin: "0 0 3px" } }, "MY KITCHEN"),
-            React.createElement("h1", { style: { fontSize: 27, fontWeight: 800, margin: 0, color: COLORS.ink, letterSpacing: "-0.01em" } }, "今日、なに作る？")),
         notice && React.createElement("div", { onClick: onDismissNotice, style: {
                 display: "flex", alignItems: "center", gap: 8, background: COLORS.accentSoft, color: COLORS.accent,
                 borderRadius: 12, padding: "10px 14px", fontSize: 13, fontWeight: 700, marginBottom: 12, cursor: "pointer"
@@ -3262,22 +3259,22 @@ function EmptyState({ onAdd }) {
 }
 function RecipeGridCard({ recipe, onClick }) {
     return (React.createElement("div", { onClick: onClick, style: {
-            borderRadius: 22,
+            borderRadius: RADIUS.card,
             overflow: "hidden",
-            background: "#fff",
-            boxShadow: "0 8px 26px rgba(32,35,31,0.075)",
+            background: COLORS.paperCard,
+            boxShadow: SHADOW.soft,
             cursor: "pointer",
         } },
         React.createElement("div", { style: {
                 width: "100%",
-                aspectRatio: "4 / 5",
+                aspectRatio: "4 / 3",
                 background: COLORS.chipBg,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
             } }, (recipe.imageUrl || recipe.imageUrl2 || recipe.imageUrl3) ? (React.createElement("img", { src: recipe.imageUrl || recipe.imageUrl2 || recipe.imageUrl3, alt: "", onError: (e) => {
                 e.target.style.display = "none";
-            }, style: { width: "100%", height: "100%", objectFit: "cover" } })) : (React.createElement("span", { style: { fontSize: 11, color: COLORS.inkSoft, opacity: 0.6 } }, "No Photo"))),
+            }, style: { width: "100%", height: "100%", objectFit: "cover" } })) : (React.createElement(BookOpen, { size: 22, color: COLORS.inkLight }))),
         React.createElement("div", { style: { padding: "12px 13px 14px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 6 } },
             React.createElement("h3", { style: {
                     fontFamily: "'Noto Sans JP', sans-serif",
@@ -3291,16 +3288,16 @@ function RecipeGridCard({ recipe, onClick }) {
                     WebkitBoxOrient: "vertical",
                     overflow: "hidden",
                 } }, recipe.title || "無題のレシピ"),
-            recipe.favorite && React.createElement(Bookmark, { size: 14, color: COLORS.accent, style: { flexShrink: 0, marginTop: 2 } }))));
+            recipe.favorite && React.createElement(Bookmark, { size: 14, color: COLORS.terracotta, style: { flexShrink: 0, marginTop: 2, fill: COLORS.terracotta } }))));
 }
 function RecipeListCard({ recipe, onClick }) {
     return (React.createElement("div", { onClick: onClick, style: {
             display: "flex",
             alignItems: "center",
-            borderRadius: 16,
+            borderRadius: RADIUS.cardSmall,
             overflow: "hidden",
-            background: "#fff",
-            boxShadow: "0 1px 6px rgba(46,42,36,0.08)",
+            background: COLORS.paperCard,
+            boxShadow: SHADOW.soft,
             cursor: "pointer",
         } },
         React.createElement("div", { style: {
@@ -3313,7 +3310,7 @@ function RecipeListCard({ recipe, onClick }) {
                 justifyContent: "center",
             } }, (recipe.imageUrl || recipe.imageUrl2 || recipe.imageUrl3) ? (React.createElement("img", { src: recipe.imageUrl || recipe.imageUrl2 || recipe.imageUrl3, alt: "", onError: (e) => {
                 e.target.style.display = "none";
-            }, style: { width: "100%", height: "100%", objectFit: "cover" } })) : (React.createElement("span", { style: { fontSize: 9.5, color: COLORS.inkSoft, opacity: 0.6 } }, "No Photo"))),
+            }, style: { width: "100%", height: "100%", objectFit: "cover" } })) : (React.createElement(BookOpen, { size: 17, color: COLORS.inkLight }))),
         React.createElement("div", { style: { flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "10px 14px" } },
             React.createElement("h3", { style: {
                     fontFamily: "'Noto Sans JP', sans-serif",
@@ -3323,7 +3320,7 @@ function RecipeListCard({ recipe, onClick }) {
                     lineHeight: 1.4,
                     color: COLORS.ink,
                 } }, recipe.title || "無題のレシピ"),
-            recipe.favorite && React.createElement(Bookmark, { size: 15, color: COLORS.accent, style: { flexShrink: 0 } }))));
+            recipe.favorite && React.createElement(Bookmark, { size: 15, color: COLORS.terracotta, style: { flexShrink: 0, fill: COLORS.terracotta } }))));
 }
 function JinaKeySettings({ jinaApiKey, saveJinaApiKey }) {
     const [value, setValue] = useState(jinaApiKey || "");
