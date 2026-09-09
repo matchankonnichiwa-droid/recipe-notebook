@@ -4215,6 +4215,7 @@ function SettingsPanel({
     newApplianceDraft, setNewApplianceDraft, addAppliance, deleteAppliance,
     editingApplianceIndex, editingApplianceName, setEditingApplianceName,
     startRenameAppliance, saveRenameAppliance,
+    printPeople, addPrintPerson, deletePrintPerson, newPrintPersonDraft, setNewPrintPersonDraft,
 }) {
     const [openSection, setOpenSection] = useState(null);
     const card = { background:"#fff", border:`1px solid ${COLORS.line}`, borderRadius:20, overflow:"hidden", marginBottom:14, boxShadow:"0 2px 12px rgba(45,42,36,.035)" };
@@ -4296,6 +4297,19 @@ function SettingsPanel({
                         React.createElement("button",{onClick:addGroup,style:action},"追加")))
             ),
             React.createElement("div",{style:card},
+                React.createElement("button",{onClick:()=>toggle("printPeople"),style:row},
+                    React.createElement("div",{style:icon},"👤"),
+                    React.createElement("div",null,React.createElement("p",{style:title},"プリントの宛先"),React.createElement("p",{style:sub},"お子さんの名前などを登録")),
+                    arrow("printPeople")),
+                openSection==="printPeople" && React.createElement("div",{style:editor},
+                    (printPeople||[]).map((p)=>React.createElement("div",{key:p,style:{display:"flex",alignItems:"center",gap:6,padding:"8px 0",borderBottom:`1px solid ${COLORS.line}`}},
+                        React.createElement("span",{style:{flex:1,fontSize:13.5,fontWeight:650}},p),
+                        React.createElement("button",{onClick:()=>deletePrintPerson(p),style:{border:"none",background:"none",color:COLORS.plum}},"削除"))),
+                    React.createElement("div",{style:{display:"flex",gap:8,marginTop:12}},
+                        React.createElement("input",{value:newPrintPersonDraft,onChange:e=>setNewPrintPersonDraft(e.target.value),onKeyDown:e=>{if(e.key==="Enter"){addPrintPerson(newPrintPersonDraft);setNewPrintPersonDraft("");}},placeholder:"例: 長男、長女",style:{...input,flex:1}}),
+                        React.createElement("button",{onClick:()=>{addPrintPerson(newPrintPersonDraft);setNewPrintPersonDraft("");},style:action},"追加")))
+            ),
+            React.createElement("div",{style:card},
                 React.createElement("button",{onClick:exportBackup,style:row},
                     React.createElement("div",{style:icon},"⇧"),
                     React.createElement("div",null,React.createElement("p",{style:title},"データをバックアップ"),React.createElement("p",{style:sub},"レシピと買い物リストをファイルに保存")),
@@ -4373,6 +4387,7 @@ function App() {
     const [printIndex, setPrintIndex] = useState([]);
     const [printsLoaded, setPrintsLoaded] = useState(false);
     const [printSaveError, setPrintSaveError] = useState("");
+    const [newPrintPersonDraft, setNewPrintPersonDraft] = useState("");
     useEffect(() => {
         const peopleRef = uref("print-people");
         const peopleCb = peopleRef.on("value", (snap) => {
@@ -4958,6 +4973,11 @@ function App() {
             setEditingApplianceName: setEditingApplianceName,
             startRenameAppliance: startRenameAppliance,
             saveRenameAppliance: saveRenameAppliance,
+            printPeople: printPeople,
+            addPrintPerson: addPrintPerson,
+            deletePrintPerson: deletePrintPerson,
+            newPrintPersonDraft: newPrintPersonDraft,
+            setNewPrintPersonDraft: setNewPrintPersonDraft,
         })));
 }
 const rootEl = document.getElementById("root");

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { FiPlus as Plus, FiX as X, FiCamera as Camera, FiFileText as FileText, FiCheck as Check, FiChevronLeft as ChevronLeft, FiEdit2 as Edit2 } from "react-icons/fi";
 
 // This chunk is loaded on demand (only when the プリント tab is opened) —
@@ -230,6 +230,53 @@ function PrintForm({ initial, printPeople, onSave, onCancel, onAddPerson, saveEr
             } }, saving ? "保存中…" : "保存する"));
 }
 
+function PhotoViewer({ photos, startIndex, onClose }) {
+    const scrollRef = useRef(null);
+    useEffect(() => {
+        // Jump straight to the tapped photo — scrollIntoView with an
+        // instant (not smooth) behavior avoids a distracting animated
+        // scroll past every photo in between on open.
+        const el = scrollRef.current;
+        if (el) {
+            el.scrollLeft = startIndex * el.clientWidth;
+        }
+    }, [startIndex]);
+    return React.createElement("div", { style: {
+            position: "fixed", inset: 0, background: "rgba(20,22,18,0.94)", zIndex: 100,
+        } },
+        React.createElement("button", { onClick: onClose, "aria-label": "閉じる", style: {
+                position: "absolute", top: "calc(12px + env(safe-area-inset-top, 0px))", right: 12, zIndex: 1,
+                width: 36, height: 36, borderRadius: 999, border: "none",
+                background: "rgba(255,255,255,0.16)", color: "#fff",
+                display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+            } }, React.createElement(X, { size: 18 })),
+        // A plain horizontally-scrolling, scroll-snapped strip — swiping
+        // (or scrolling two-finger on a trackpad) moves to the next/
+        // previous photo natively, no custom gesture code needed.
+        React.createElement("div", { ref: scrollRef, style: {
+                display: "flex",
+                width: "100%",
+                height: "100%",
+                overflowX: "auto",
+                scrollSnapType: "x mandatory",
+                WebkitOverflowScrolling: "touch",
+            } },
+            photos.map((url, i) => React.createElement("div", { key: i, style: {
+                    flex: "0 0 100%",
+                    scrollSnapAlign: "start",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: 16,
+                    boxSizing: "border-box",
+                } },
+                React.createElement("img", { src: url, alt: "", style: { maxWidth: "100%", maxHeight: "100%", borderRadius: 8 } })))),
+        photos.length > 1 && React.createElement("div", { style: {
+                position: "absolute", bottom: "calc(16px + env(safe-area-inset-bottom, 0px))", left: 0, right: 0,
+                textAlign: "center", color: "rgba(255,255,255,0.7)", fontSize: 12.5, fontWeight: 700,
+            } }, `${startIndex + 1} / ${photos.length}`));
+}
+
 function PrintDetailView({ print, onBack, onEdit, onDelete }) {
     const [viewerIndex, setViewerIndex] = useState(null);
     if (!print) {
@@ -252,11 +299,7 @@ function PrintDetailView({ print, onBack, onEdit, onDelete }) {
             (print.photos || []).map((url, i) => React.createElement("img", { key: i, src: url, alt: "", onClick: () => setViewerIndex(i), style: {
                     width: "100%", borderRadius: 12, border: `1px solid ${COLORS.line}`, cursor: "pointer", display: "block",
                 } }))),
-        viewerIndex != null && React.createElement("div", { onClick: () => setViewerIndex(null), style: {
-                position: "fixed", inset: 0, background: "rgba(20,22,18,0.92)", zIndex: 100,
-                display: "flex", alignItems: "center", justifyContent: "center", padding: 16,
-            } },
-            React.createElement("img", { src: print.photos[viewerIndex], alt: "", style: { maxWidth: "100%", maxHeight: "100%", borderRadius: 8 } })));
+        viewerIndex != null && React.createElement(PhotoViewer, { photos: print.photos, startIndex: viewerIndex, onClose: () => setViewerIndex(null) }));
 }
 
 // Top-level export used by LazyPrintsView in app.js.
