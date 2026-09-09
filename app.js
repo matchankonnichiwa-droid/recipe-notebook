@@ -3305,9 +3305,58 @@ const ONBOARDING_PAGES = [
 // up out of their own components just for a preview. A safer starting
 // point than a fully "live data" dashboard; live previews per card is a
 // reasonable next step once this base is confirmed working.
+// A small colored circle behind the icon, only lit up in that item's own
+// feature color when active — the "cute badge" look from the reference
+// mockups, applied to the bottom nav. Its own component (like the other
+// standalone pieces above) so the six nav buttons below don't each need
+// their own copy of this markup.
+function NavIcon({ icon: Icon, active, color, soft }) {
+    return React.createElement("div", { style: {
+            width: 30, height: 30, borderRadius: "50%",
+            background: active ? soft : "transparent",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            transition: "background 0.15s",
+        } }, React.createElement(Icon, { size: 18, color: active ? color : COLORS.inkSoft }));
+}
 function HomeView({ myName, onNavigate }) {
     const hour = new Date().getHours();
     const greeting = hour < 11 ? "おはようございます" : hour < 17 ? "こんにちは" : "こんばんは";
+    // Each preview is its own small, read-only listener scoped to this
+    // component — kept deliberately separate from (and not touching) the
+    // existing recipes/mealPlan/todos/shopping/prints state that already
+    // lives inside their own tabs, so this stays additive rather than a
+    // restructuring of how those tabs already work.
+    const [todayMeals, setTodayMeals] = useState([]);
+    const [todoPreview, setTodoPreview] = useState([]);
+    const [shoppingPreview, setShoppingPreview] = useState([]);
+    const [printsPreview, setPrintsPreview] = useState([]);
+    useEffect(() => {
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const mealRef = uref(`meal-plan/${todayStr}`);
+        const mealCb = mealRef.on("value", (snap) => setTodayMeals(snap.val() || []));
+        const todoRef = uref("todos");
+        const todoCb = todoRef.on("value", (snap) => {
+            const val = Object.values(snap.val() || {});
+            setTodoPreview(val.filter((t) => !t.done).slice(0, 3));
+        });
+        const shoppingRef = uref("shopping");
+        const shoppingCb = shoppingRef.on("value", (snap) => {
+            const val = Object.values(snap.val() || {});
+            setShoppingPreview(val.filter((t) => !t.done).slice(0, 3));
+        });
+        const printsRef = uref("print-index");
+        const printsCb = printsRef.on("value", (snap) => {
+            const val = Object.values(snap.val() || {}).sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+            setPrintsPreview(val.slice(0, 2));
+        });
+        return () => {
+            mealRef.off("value", mealCb);
+            todoRef.off("value", todoCb);
+            shoppingRef.off("value", shoppingCb);
+            printsRef.off("value", printsCb);
+        };
+    }, []);
+    const previewFor = { calendar: todayMeals.map((m) => m.title).filter(Boolean), todo: todoPreview.map((t) => t.text).filter(Boolean), shopping: shoppingPreview.map((t) => t.text).filter(Boolean), prints: printsPreview.map((p) => p.title).filter(Boolean) };
     const cards = [
         { key: "recipe", label: "レシピ", desc: "保存したレシピを見る", icon: BookOpen, color: COLORS.featureRecipe, soft: COLORS.featureRecipeSoft },
         { key: "calendar", label: "献立", desc: "今週の献立を立てる", icon: CalendarIcon, color: COLORS.featureRecipe, soft: COLORS.featureRecipeSoft },
@@ -3329,7 +3378,9 @@ function HomeView({ myName, onNavigate }) {
                     } }, React.createElement(c.icon, { size: 19, color: c.color })),
                 React.createElement("div", null,
                     React.createElement("p", { style: { fontSize: 14.5, fontWeight: 800, color: COLORS.ink, margin: "0 0 2px" } }, c.label),
-                    React.createElement("p", { style: { fontSize: 11.5, color: COLORS.inkSoft, margin: 0 } }, c.desc))))));
+                    React.createElement("p", { style: { fontSize: 11.5, color: COLORS.inkSoft, margin: "0 0 6px" } }, c.desc)),
+                (previewFor[c.key] || []).length > 0 && React.createElement("div", { style: { borderTop: `1px solid ${COLORS.line}`, paddingTop: 8, display: "flex", flexDirection: "column", gap: 3 } },
+                    previewFor[c.key].map((text, i) => React.createElement("p", { key: i, style: { fontSize: 11, color: COLORS.inkSoft, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, `・${text}`)))))));
 }
 function OnboardingFlow({ onFinish }) {
     const [page, setPage] = useState(0);
@@ -5068,32 +5119,32 @@ function App() {
                     flex: 1, border: "none", background: "none", padding: "7px 0 5px",
                     display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
                     fontSize: 10.5, fontWeight: 700, color: mode === "home" ? COLORS.ink : COLORS.inkSoft,
-                } }, React.createElement(GridIcon, { size: 21 }), "ホーム"),
+                } }, React.createElement(NavIcon, { icon: GridIcon, active: mode === "home", color: COLORS.ink, soft: COLORS.soft }), "ホーム"),
             React.createElement("button", { onClick: () => { switchMode("recipe"); setRecipeInitialView("list"); setRecipeHomeToken((v) => v + 1); setShowSettings(false); }, style: {
                     flex: 1, border: "none", background: "none", padding: "7px 0 5px",
                     display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
                     fontSize: 10.5, fontWeight: 700, color: mode === "recipe" && recipeInitialView === "list" ? COLORS.featureRecipe : COLORS.inkSoft,
-                } }, React.createElement(BookOpen, { size: 21 }), "レシピ"),
+                } }, React.createElement(NavIcon, { icon: BookOpen, active: mode === "recipe" && recipeInitialView === "list", color: COLORS.featureRecipe, soft: COLORS.featureRecipeSoft }), "レシピ"),
             React.createElement("button", { onClick: () => { switchMode("recipe"); setRecipeInitialView("calendar"); setRecipeHomeToken((v) => v + 1); setShowSettings(false); }, style: {
                     flex: 1, border: "none", background: "none", padding: "7px 0 5px",
                     display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
                     fontSize: 10.5, fontWeight: 700, color: mode === "recipe" && recipeInitialView === "calendar" ? COLORS.featureRecipe : COLORS.inkSoft,
-                } }, React.createElement(CalendarIcon, { size: 21 }), "献立"),
+                } }, React.createElement(NavIcon, { icon: CalendarIcon, active: mode === "recipe" && recipeInitialView === "calendar", color: COLORS.featureRecipe, soft: COLORS.featureRecipeSoft }), "献立"),
             React.createElement("button", { onClick: () => switchMode("shopping"), style: {
                     flex: 1, border: "none", background: "none", padding: "7px 0 5px",
                     display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
                     fontSize: 10.5, fontWeight: 700, color: (mode === "shopping" || mode === "todo") ? COLORS.featureShopping : COLORS.inkSoft,
-                } }, React.createElement(ClipboardPaste, { size: 21 }), "買い物"),
+                } }, React.createElement(NavIcon, { icon: ClipboardPaste, active: mode === "shopping" || mode === "todo", color: COLORS.featureShopping, soft: COLORS.featureShoppingSoft }), "買い物"),
             React.createElement("button", { onClick: () => switchMode("prints"), style: {
                     flex: 1, border: "none", background: "none", padding: "7px 0 5px",
                     display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
                     fontSize: 10.5, fontWeight: 700, color: mode === "prints" ? COLORS.featurePrints : COLORS.inkSoft,
-                } }, React.createElement(FileText, { size: 21 }), "プリント"),
+                } }, React.createElement(NavIcon, { icon: FileText, active: mode === "prints", color: COLORS.featurePrints, soft: COLORS.featurePrintsSoft }), "プリント"),
             React.createElement("button", { onClick: () => setShowSettings(true), title: "設定", "aria-label": "設定", style: {
                     flex: 1, border: "none", background: "none", padding: "7px 0 5px",
                     display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
                     fontSize: 10.5, fontWeight: 700, color: COLORS.inkSoft,
-                } }, React.createElement(Settings, { size: 21 }), "設定")),
+                } }, React.createElement(NavIcon, { icon: Settings, active: false, color: COLORS.ink, soft: COLORS.soft }), "設定")),
         React.createElement("div", { style: { flex: 1, minHeight: 0, overflowY: "auto", paddingBottom: "calc(70px + env(safe-area-inset-bottom, 0px))", background: COLORS.paper } },
             mode === "home" && React.createElement(HomeView, { myName: myName, onNavigate: (key) => {
                     if (key === "recipe") { switchMode("recipe"); setRecipeInitialView("list"); setRecipeHomeToken((v) => v + 1); }
