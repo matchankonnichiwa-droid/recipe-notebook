@@ -2697,7 +2697,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
         React.createElement("div", { style: {
                 width: "100%",
                 maxWidth: 520,
-                padding: "calc(18px + env(safe-area-inset-top, 0px)) 18px 118px",
+                padding: "calc(8px + env(safe-area-inset-top, 0px)) 16px 118px",
             } },
             React.createElement(Header, { view: view, onBack: () => { setView(view === "detail" ? detailOrigin : "list"); setDetailOrigin("list"); resetAddForm(); setConfirmDelete(false); }, isFavorite: !!selected?.favorite, onToggleFavorite: () => selected && toggleFavorite(selected), editDisabled: fullRecipeLoading, onEdit: () => {
                     // Guard against opening the editor before the full
@@ -2749,7 +2749,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
       `)));
 }
 function Header({ view, onBack, isFavorite, onToggleFavorite, onEdit, editDisabled, confirmDelete, onArmDelete, onConfirmDelete, onCancelDelete }) {
-    return (React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 22, minHeight: 48 } }, view !== "list" ? (React.createElement(React.Fragment, null,
+    return (React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10, minHeight: 42 } }, view !== "list" ? (React.createElement(React.Fragment, null,
         React.createElement("button", { onClick: onBack, style: {
                 background: "none",
                 border: "none",
@@ -2773,16 +2773,16 @@ function Header({ view, onBack, isFavorite, onToggleFavorite, onEdit, editDisabl
                 React.createElement(Edit2, { size: 18, color: COLORS.inkSoft })),
             React.createElement("button", { onClick: onArmDelete, "aria-label": "\u524A\u9664", style: { background: "none", border: "none", padding: 8, cursor: "pointer", display: "flex" } },
                 React.createElement(Trash2, { size: 18, color: COLORS.inkSoft }))))))) : (React.createElement(React.Fragment, null,
-        React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 3 } },
-            React.createElement("div", { style: { fontSize: 10, letterSpacing: "0.18em", fontWeight: 700, color: COLORS.sage } }, "MY KITCHEN"),
+        React.createElement("div", { style: { display: "flex", alignItems: "center", minHeight: 42 } },
             React.createElement("h1", { style: {
                     fontFamily: "'Noto Sans JP', sans-serif",
-                    fontSize: 27,
-                    fontWeight: 700,
+                    fontSize: 25,
+                    fontWeight: 800,
                     margin: 0,
-                    letterSpacing: "-0.04em",
+                    letterSpacing: "-0.035em",
                     lineHeight: 1.18,
-                } }, "\u30EC\u30B7\u30D4\u30CE\u30FC\u30C8"))))));
+                    color: COLORS.ink,
+                } }, "今日、なに作る？"))))));
 }
 function groupByDishCategory(recipes) {
     const groups = {};
@@ -2834,17 +2834,13 @@ function ListView({ recipes, total, query, setQuery, categoryFilter, setCategory
         { label: "手動で入力", icon: Edit2, mode: "manual" },
     ];
     return (React.createElement("div", { style: { paddingBottom: 24 } },
-        React.createElement("div", { style: { margin: "2px 2px 18px" } },
-            React.createElement("div", { style: { fontSize: 11, fontWeight: 800, letterSpacing: "0.14em", color: COLORS.sage, marginBottom: 5 } }, "RECIPE NOTEBOOK"),
-            React.createElement("h1", { style: { margin: 0, fontSize: 28, lineHeight: 1.25, letterSpacing: "-0.02em", fontWeight: 800, color: COLORS.ink } }, "今日、なに作る？"),
-            React.createElement("p", { style: { margin: "7px 0 0", fontSize: 12.5, lineHeight: 1.6, color: COLORS.inkSoft } }, "お気に入りのレシピを、毎日の献立と買い物へ。")),
         notice && React.createElement("div", { onClick: onDismissNotice, style: {
                 display: "flex", alignItems: "center", gap: 8, background: COLORS.accentSoft, color: COLORS.accent,
                 borderRadius: 12, padding: "10px 14px", fontSize: 13, fontWeight: 700, marginBottom: 12, cursor: "pointer"
             } },
             React.createElement(Check, { size: 15, style: { flexShrink: 0 } }),
             React.createElement("span", { style: { flex: 1 } }, notice)),
-        React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 12 } },
+        React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 10 } },
             React.createElement("div", { style: {
                     flex: 1,
                     minWidth: 0,
@@ -2853,7 +2849,7 @@ function ListView({ recipes, total, query, setQuery, categoryFilter, setCategory
                     gap: 8,
                     background: "#fff",
                     borderRadius: 16,
-                    padding: "13px 15px",
+                    padding: "12px 14px",
                     border: `1px solid ${COLORS.line}`,
                     boxShadow: "0 4px 18px rgba(65,55,45,0.045)",
                 } },
@@ -2900,7 +2896,7 @@ function ListView({ recipes, total, query, setQuery, categoryFilter, setCategory
         favoriteOnly && (React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 6, marginBottom: 12, fontSize: 12, color: COLORS.accent, fontWeight: 700 } },
             React.createElement(Bookmark, { size: 13 }),
             " \u30D6\u30C3\u30AF\u30DE\u30FC\u30AF\u3057\u305F\u30EC\u30B7\u30D4\u306E\u307F\u8868\u793A\u4E2D")),
-        availableAppliances.length > 0 && (React.createElement("div", { style: { marginBottom: 14 } },
+        availableAppliances.length > 0 && (React.createElement("div", { style: { marginBottom: 10 } },
             React.createElement("button", { onClick: () => setShowApplianceFilter((v) => !v), style: {
                     display: "inline-flex",
                     alignItems: "center",
@@ -2954,7 +2950,7 @@ function ListView({ recipes, total, query, setQuery, categoryFilter, setCategory
                 gap: 8,
                 overflowX: "auto",
                 paddingBottom: 4,
-                marginBottom: 16,
+                marginBottom: 12,
                 WebkitOverflowScrolling: "touch",
             } },
             React.createElement("button", { onClick: () => { setCategoryFilter(null); setMeatTypeFilter(null); setNoodleTypeFilter(null); setVegTypeFilter(null); }, style: {
@@ -3143,16 +3139,16 @@ function ListView({ recipes, total, query, setQuery, categoryFilter, setCategory
                 right: "max(20px, calc(50% - 238px))",
                 bottom: "calc(82px + env(safe-area-inset-bottom, 0px))",
                 minWidth: 58,
-                height: 54,
-                padding: "0 18px",
-                borderRadius: 18,
+                height: 50,
+                padding: "0 16px",
+                borderRadius: 16,
                 background: COLORS.accent,
                 color: "#fff",
                 border: "none",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                boxShadow: "0 10px 28px rgba(67,84,69,0.28)",
+                boxShadow: "0 8px 22px rgba(67,84,69,0.22)",
                 zIndex: 100,
                 transform: showQuickAdd ? "rotate(45deg)" : "rotate(0deg)",
                 transition: "transform 180ms ease",
@@ -3243,23 +3239,24 @@ function EmptyState({ onAdd }) {
 }
 function RecipeGridCard({ recipe, onClick }) {
     return (React.createElement("div", { onClick: onClick, style: {
-            borderRadius: 22,
+            borderRadius: 18,
             overflow: "hidden",
             background: "#fff",
-            boxShadow: "0 8px 26px rgba(32,35,31,0.075)",
+            border: `1px solid ${COLORS.line}`,
+            boxShadow: "0 3px 14px rgba(65,55,45,0.055)",
             cursor: "pointer",
         } },
         React.createElement("div", { style: {
                 width: "100%",
-                aspectRatio: "4 / 5",
+                aspectRatio: "1 / 1",
                 background: COLORS.chipBg,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
             } }, (recipe.imageUrl || recipe.imageUrl2 || recipe.imageUrl3) ? (React.createElement("img", { src: recipe.imageUrl || recipe.imageUrl2 || recipe.imageUrl3, alt: "", onError: (e) => {
                 e.target.style.display = "none";
-            }, style: { width: "100%", height: "100%", objectFit: "cover" } })) : (React.createElement("span", { style: { fontSize: 11, color: COLORS.inkSoft, opacity: 0.6 } }, "No Photo"))),
-        React.createElement("div", { style: { padding: "12px 13px 14px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 6 } },
+            }, style: { width: "100%", height: "100%", objectFit: "cover" } })) : (React.createElement("span", { style: { fontSize: 11, color: COLORS.inkSoft, opacity: 0.6 } }, "写真なし"))),
+        React.createElement("div", { style: { padding: "10px 11px 12px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 6 } },
             React.createElement("h3", { style: {
                     fontFamily: "'Noto Sans JP', sans-serif",
                     fontSize: 14,
@@ -3294,7 +3291,7 @@ function RecipeListCard({ recipe, onClick }) {
                 justifyContent: "center",
             } }, (recipe.imageUrl || recipe.imageUrl2 || recipe.imageUrl3) ? (React.createElement("img", { src: recipe.imageUrl || recipe.imageUrl2 || recipe.imageUrl3, alt: "", onError: (e) => {
                 e.target.style.display = "none";
-            }, style: { width: "100%", height: "100%", objectFit: "cover" } })) : (React.createElement("span", { style: { fontSize: 9.5, color: COLORS.inkSoft, opacity: 0.6 } }, "No Photo"))),
+            }, style: { width: "100%", height: "100%", objectFit: "cover" } })) : (React.createElement("span", { style: { fontSize: 9.5, color: COLORS.inkSoft, opacity: 0.6 } }, "写真なし"))),
         React.createElement("div", { style: { flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "10px 14px" } },
             React.createElement("h3", { style: {
                     fontFamily: "'Noto Sans JP', sans-serif",
@@ -4031,9 +4028,9 @@ function DetailView({ recipe, loadingFull, onAddToShoppingList }) {
                     flex: 1,
                     minWidth: 0,
                     width: "100%",
-                    height: 260,
+                    height: 230,
                     objectFit: "cover",
-                    borderRadius: 20,
+                    borderRadius: 18,
                     border: `1px solid ${COLORS.line}`,
                     boxShadow: "0 8px 24px rgba(46,42,36,0.08)",
                 } }),
@@ -4043,9 +4040,9 @@ function DetailView({ recipe, loadingFull, onAddToShoppingList }) {
                     flex: 1,
                     minWidth: 0,
                     width: "100%",
-                    height: 260,
+                    height: 230,
                     objectFit: "cover",
-                    borderRadius: 20,
+                    borderRadius: 18,
                     border: `1px solid ${COLORS.line}`,
                     boxShadow: "0 8px 24px rgba(46,42,36,0.08)",
                 } }),
@@ -4055,14 +4052,14 @@ function DetailView({ recipe, loadingFull, onAddToShoppingList }) {
                     flex: 1,
                     minWidth: 0,
                     width: "100%",
-                    height: 260,
+                    height: 230,
                     objectFit: "cover",
-                    borderRadius: 20,
+                    borderRadius: 18,
                     border: `1px solid ${COLORS.line}`,
                     boxShadow: "0 8px 24px rgba(46,42,36,0.08)",
                 } }))),
         React.createElement("div", { style: { marginBottom: 4 } },
-            React.createElement("h2", { style: { fontFamily: "'Noto Sans JP', sans-serif", fontSize: 25, fontWeight: 800, margin: 0, lineHeight: 1.35, letterSpacing: "-0.025em" } }, recipe.title)),
+            React.createElement("h2", { style: { fontFamily: "'Noto Sans JP', sans-serif", fontSize: 23, fontWeight: 800, margin: 0, lineHeight: 1.35, letterSpacing: "-0.025em" } }, recipe.title)),
         (recipe.dishCategory || recipe.meatType || recipe.noodleType || recipe.vegType || recipe.soupType || recipe.appliance || (recipe.sourceType && recipe.sourceType !== "other")) && (React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 } },
             recipe.sourceType && recipe.sourceType !== "other" && React.createElement("span", { style: {
                     fontSize: 11.5, fontWeight: 700, color: COLORS.sage, background: COLORS.sageSoft,
@@ -4144,9 +4141,9 @@ function SectionBlock({ title, children }) {
             marginTop: 14,
             background: "#fff",
             border: `1px solid ${COLORS.line}`,
-            borderRadius: 22,
-            padding: "18px 17px",
-            boxShadow: "0 2px 12px rgba(46,42,36,0.035)"
+            borderRadius: 18,
+            padding: "16px 15px",
+            boxShadow: "0 2px 10px rgba(65,55,45,0.03)"
         } },
         React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 12 } },
             React.createElement("span", { style: { width: 4, height: 18, borderRadius: 99, background: COLORS.accent, display: "inline-block" } }),
@@ -4899,8 +4896,8 @@ function App() {
                 alignItems: "center",
                 background: "rgba(255,255,255,0.96)",
                 borderTop: `1px solid ${COLORS.line}`,
-                padding: "7px 8px calc(7px + env(safe-area-inset-bottom, 0px))",
-                boxShadow: "0 -10px 32px rgba(65,55,45,0.07)",
+                padding: "6px 6px calc(6px + env(safe-area-inset-bottom, 0px))",
+                boxShadow: "0 -6px 24px rgba(65,55,45,0.06)",
                 backdropFilter: "blur(18px)",
                 WebkitBackdropFilter: "blur(18px)",
             } },
