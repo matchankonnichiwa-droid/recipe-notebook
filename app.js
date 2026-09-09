@@ -4229,6 +4229,7 @@ function SettingsPanel({
     const action = { border:"none", background:COLORS.accent, color:"#fff", borderRadius:12, padding:"10px 14px", fontSize:12.5, fontWeight:800 };
     const toggle = (key) => setOpenSection(openSection === key ? null : key);
     const arrow = (key) => React.createElement("span",{style:{marginLeft:"auto",fontSize:20,color:COLORS.inkSoft,transform:openSection===key?"rotate(90deg)":"none",transition:"transform .18s"}},"›");
+    const sectionHeader = { fontSize:12.5, fontWeight:800, color:COLORS.inkSoft, letterSpacing:"0.03em", margin:"20px 4px 8px" };
     return React.createElement("div",{style:{position:"fixed",inset:0,zIndex:110,background:COLORS.paper,overflowY:"auto",paddingBottom:"calc(30px + env(safe-area-inset-bottom,0px))"}},
         React.createElement("div",{style:{position:"sticky",top:0,zIndex:2,display:"grid",gridTemplateColumns:"44px 1fr 44px",alignItems:"center",padding:"calc(13px + env(safe-area-inset-top,0px)) 14px 12px",background:"rgba(247,246,242,.95)",backdropFilter:"blur(16px)"}},
             React.createElement("button",{onClick:onClose,style:{border:"none",background:"none",width:40,height:40,display:"grid",placeItems:"center"}},React.createElement(ChevronLeft,{size:26})),
@@ -4236,6 +4237,7 @@ function SettingsPanel({
             React.createElement("div",null)
         ),
         React.createElement("div",{style:{maxWidth:520,margin:"0 auto",padding:"14px 14px 28px"}},
+            React.createElement("p",{style:{...sectionHeader,marginTop:0}},"全般"),
             React.createElement("div",{style:card},
                 React.createElement("button",{onClick:()=>toggle("profile"),style:row},
                     React.createElement("div",{style:icon},"☺"),
@@ -4246,6 +4248,37 @@ function SettingsPanel({
                         React.createElement("input",{value:nameDraft,onChange:e=>setNameDraft(e.target.value),onKeyDown:e=>e.key==="Enter"&&saveName(),placeholder:"あなたの名前",style:{...input,flex:1}}),
                         React.createElement("button",{onClick:saveName,style:action},"保存")))
             ),
+            React.createElement("div",{style:card},
+                React.createElement("button",{onClick:exportBackup,style:row},
+                    React.createElement("div",{style:icon},"⇧"),
+                    React.createElement("div",null,React.createElement("p",{style:title},"データをバックアップ"),React.createElement("p",{style:sub},"レシピと買い物リストをファイルに保存")),
+                    React.createElement("span",{style:{marginLeft:"auto",fontSize:20,color:COLORS.inkSoft}},"›")),
+                React.createElement("div",{style:divider}),
+                React.createElement("button",{onClick:importBackup,style:row},
+                    React.createElement("div",{style:icon},"⇩"),
+                    React.createElement("div",null,React.createElement("p",{style:title},"データを復元"),React.createElement("p",{style:sub},"バックアップファイルから戻す")),
+                    React.createElement("span",{style:{marginLeft:"auto",fontSize:20,color:COLORS.inkSoft}},"›"))
+            ),
+            React.createElement("div",{style:card},
+                React.createElement("button",{onClick:migrateEmbeddedPhotos,disabled:photoMigrationStatus && typeof photoMigrationStatus==="object",style:row},
+                    React.createElement("div",{style:icon},"⚡"),
+                    React.createElement("div",null,
+                        React.createElement("p",{style:title},"写真を軽量化する"),
+                        React.createElement("p",{style:sub},
+                            photoMigrationStatus && typeof photoMigrationStatus==="object"
+                                ? `処理中… ${photoMigrationStatus.done}/${photoMigrationStatus.total}件`
+                                : photoMigrationStatus==="done"
+                                    ? "完了しました。起動が軽くなっているはずです。"
+                                    : "古いレシピの写真データを整理して、起動を速くします")),
+                    React.createElement("span",{style:{marginLeft:"auto",fontSize:20,color:COLORS.inkSoft}},"›"))
+            ),
+            React.createElement("div",{style:card},
+                React.createElement("div",{style:{...row,cursor:"default"}},
+                    React.createElement("div",{style:icon},"i"),
+                    React.createElement("div",null,React.createElement("p",{style:title},"レシピノート"),React.createElement("p",{style:sub},"シンプルに、ためて、作って、買い物へ。")),
+                    React.createElement("span",{style:{marginLeft:"auto",fontSize:11,color:COLORS.inkSoft}},"v1"))
+            ),
+            React.createElement("p",{style:sectionHeader},"レシピ"),
             React.createElement("div",{style:card},
                 React.createElement("button",{onClick:()=>toggle("import"),style:row},
                     React.createElement("div",{style:icon},"↗"),
@@ -4280,6 +4313,7 @@ function SettingsPanel({
                         React.createElement("input",{value:newApplianceDraft,onChange:e=>setNewApplianceDraft(e.target.value),onKeyDown:e=>e.key==="Enter"&&addAppliance(),placeholder:"新しい調理家電",style:{...input,flex:1}}),
                         React.createElement("button",{onClick:addAppliance,style:action},"追加")))
             ),
+            React.createElement("p",{style:sectionHeader},"買い物"),
             React.createElement("div",{style:card},
                 React.createElement("button",{onClick:()=>toggle("groups"),style:row},
                     React.createElement("div",{style:icon},"▰"),
@@ -4296,6 +4330,7 @@ function SettingsPanel({
                         React.createElement("input",{value:newGroupName,onChange:e=>setNewGroupName(e.target.value),onKeyDown:e=>e.key==="Enter"&&addGroup(),placeholder:"新しいグループ",style:{...input,flex:1}}),
                         React.createElement("button",{onClick:addGroup,style:action},"追加")))
             ),
+            React.createElement("p",{style:sectionHeader},"プリント"),
             React.createElement("div",{style:card},
                 React.createElement("button",{onClick:()=>toggle("printPeople"),style:row},
                     React.createElement("div",{style:icon},"👤"),
@@ -4308,36 +4343,6 @@ function SettingsPanel({
                     React.createElement("div",{style:{display:"flex",gap:8,marginTop:12}},
                         React.createElement("input",{value:newPrintPersonDraft,onChange:e=>setNewPrintPersonDraft(e.target.value),onKeyDown:e=>{if(e.key==="Enter"){addPrintPerson(newPrintPersonDraft);setNewPrintPersonDraft("");}},placeholder:"例: 長男、長女",style:{...input,flex:1}}),
                         React.createElement("button",{onClick:()=>{addPrintPerson(newPrintPersonDraft);setNewPrintPersonDraft("");},style:action},"追加")))
-            ),
-            React.createElement("div",{style:card},
-                React.createElement("button",{onClick:exportBackup,style:row},
-                    React.createElement("div",{style:icon},"⇧"),
-                    React.createElement("div",null,React.createElement("p",{style:title},"データをバックアップ"),React.createElement("p",{style:sub},"レシピと買い物リストをファイルに保存")),
-                    React.createElement("span",{style:{marginLeft:"auto",fontSize:20,color:COLORS.inkSoft}},"›")),
-                React.createElement("div",{style:divider}),
-                React.createElement("button",{onClick:importBackup,style:row},
-                    React.createElement("div",{style:icon},"⇩"),
-                    React.createElement("div",null,React.createElement("p",{style:title},"データを復元"),React.createElement("p",{style:sub},"バックアップファイルから戻す")),
-                    React.createElement("span",{style:{marginLeft:"auto",fontSize:20,color:COLORS.inkSoft}},"›"))
-            ),
-            React.createElement("div",{style:card},
-                React.createElement("button",{onClick:migrateEmbeddedPhotos,disabled:photoMigrationStatus && typeof photoMigrationStatus==="object",style:row},
-                    React.createElement("div",{style:icon},"⚡"),
-                    React.createElement("div",null,
-                        React.createElement("p",{style:title},"写真を軽量化する"),
-                        React.createElement("p",{style:sub},
-                            photoMigrationStatus && typeof photoMigrationStatus==="object"
-                                ? `処理中… ${photoMigrationStatus.done}/${photoMigrationStatus.total}件`
-                                : photoMigrationStatus==="done"
-                                    ? "完了しました。起動が軽くなっているはずです。"
-                                    : "古いレシピの写真データを整理して、起動を速くします")),
-                    React.createElement("span",{style:{marginLeft:"auto",fontSize:20,color:COLORS.inkSoft}},"›"))
-            ),
-            React.createElement("div",{style:card},
-                React.createElement("div",{style:{...row,cursor:"default"}},
-                    React.createElement("div",{style:icon},"i"),
-                    React.createElement("div",null,React.createElement("p",{style:title},"レシピノート"),React.createElement("p",{style:sub},"シンプルに、ためて、作って、買い物へ。")),
-                    React.createElement("span",{style:{marginLeft:"auto",fontSize:11,color:COLORS.inkSoft}},"v1"))
             )
         )
     );
@@ -4396,7 +4401,11 @@ function App() {
         const idxRef = uref("print-index");
         const idxCb = idxRef.on("value", (snap) => {
             const val = snap.val();
-            const list = val ? Object.values(val).sort((a, b) => (b.date || "").localeCompare(a.date || "")) : [];
+            // Sorted by createdAt (when it was added to the app), not the
+            // document's own written date — those can be backdated or out
+            // of order, but newest-added-first is what people expect from
+            // a running list.
+            const list = val ? Object.values(val).sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || "")) : [];
             setPrintIndex(list);
             setPrintsLoaded(true);
         }, () => setPrintsLoaded(true));
@@ -4414,7 +4423,7 @@ function App() {
             id: print.id,
             title: print.title || "",
             date: print.date || "",
-            status: print.status || "pending",
+            createdAt: print.createdAt || "",
             personTags: print.personTags || [],
             photoCount: (print.photos || []).length,
             thumbnailUrl: (print.photos || [])[0] || "",
@@ -4428,7 +4437,7 @@ function App() {
         const thumbnailUrl = printData.photos?.[0]
             ? await recompressDataUrl(printData.photos[0], 200, 0.5).catch(() => printData.photos[0])
             : "";
-        const full = { ...printData, id };
+        const full = { ...printData, id, createdAt: printData.createdAt || new Date().toISOString() };
         const indexEntry = { ...buildPrintIndexEntry(full), thumbnailUrl };
         try {
             await Promise.all([
@@ -4450,18 +4459,6 @@ function App() {
         }
         catch {
             setPrintSaveError("削除に失敗しました(通信環境を確認してください)。");
-        }
-    }
-    async function togglePrintStatus(id, currentStatus) {
-        const next = currentStatus === "done" ? "pending" : "done";
-        try {
-            await Promise.all([
-                uref(`prints/${id}/status`).set(next),
-                uref(`print-index/${id}/status`).set(next),
-            ]);
-        }
-        catch {
-            setPrintSaveError("保存に失敗しました(通信環境を確認してください)。");
         }
     }
     function addPrintPerson(name) {
@@ -4931,7 +4928,7 @@ function App() {
         React.createElement("div", { style: { flex: 1, minHeight: 0, overflowY: "auto", paddingBottom: "calc(70px + env(safe-area-inset-bottom, 0px))", background: COLORS.paper } },
             mode === "recipe" && React.createElement(RecipeNotebook, { key: recipeHomeToken, initialView: recipeInitialView, apiKey: apiKey, jinaApiKey: jinaApiKey, categoryOrder: categoryOrder, applianceOrder: applianceOrder }),
             mode === "shopping" && React.createElement(TodoApp, { listKey: "shopping", myName: myName, ungroupedLabel: ungroupedLabels.shopping }),
-            mode === "prints" && React.createElement(LazyPrintsView, { printIndex: printIndex, printsLoaded: printsLoaded, printPeople: printPeople, saveError: printSaveError, onSave: savePrint, onDelete: deletePrint, onToggleStatus: togglePrintStatus, onAddPerson: addPrintPerson, uref: uref })),
+            mode === "prints" && React.createElement(LazyPrintsView, { printIndex: printIndex, printsLoaded: printsLoaded, printPeople: printPeople, saveError: printSaveError, onSave: savePrint, onDelete: deletePrint, onAddPerson: addPrintPerson, uref: uref })),
         showSettings && React.createElement(SettingsPanel, {
             onClose: () => setShowSettings(false),
             myName: myName,

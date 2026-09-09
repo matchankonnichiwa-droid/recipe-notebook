@@ -44,15 +44,6 @@ function fileToDocumentPhoto(file) {
     });
 }
 
-function StatusChip({ status }) {
-    const isDone = status === "done";
-    return React.createElement("span", { style: {
-            fontSize: 11, fontWeight: 800, borderRadius: 999, padding: "3px 10px",
-            color: isDone ? COLORS.sage : COLORS.plum,
-            background: isDone ? COLORS.sageSoft : "#FBEAE5",
-        } }, isDone ? "対応済み" : "未対応");
-}
-
 function PrintListCard({ print, onOpen, onDelete }) {
     return React.createElement("div", { style: {
             position: "relative", background: "#fff", borderRadius: 14,
@@ -70,7 +61,6 @@ function PrintListCard({ print, onOpen, onDelete }) {
             React.createElement("p", { style: { fontSize: 14, fontWeight: 700, color: COLORS.ink, margin: "0 0 4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, print.title || "無題のプリント"),
             React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" } },
                 print.date && React.createElement("span", { style: { fontSize: 12, color: COLORS.inkSoft } }, print.date),
-                React.createElement(StatusChip, { status: print.status }),
                 (print.personTags || []).map((p) => React.createElement("span", { key: p, style: {
                         fontSize: 11, fontWeight: 700, color: COLORS.mustard, background: "#F5EDE1", borderRadius: 999, padding: "2px 8px",
                     } }, p)))),
@@ -83,11 +73,8 @@ function PrintListCard({ print, onOpen, onDelete }) {
 
 function PrintListView({ printIndex, printsLoaded, printPeople, onOpenAdd, onOpenDetail, onDelete }) {
     const [personFilter, setPersonFilter] = useState(null);
-    const [statusFilter, setStatusFilter] = useState("all"); // all | pending | done
     const filtered = printIndex.filter((p) => {
         if (personFilter && !(p.personTags || []).includes(personFilter))
-            return false;
-        if (statusFilter !== "all" && (p.status || "pending") !== statusFilter)
             return false;
         return true;
     });
@@ -103,13 +90,6 @@ function PrintListView({ printIndex, printsLoaded, printPeople, onOpenAdd, onOpe
                     display: "flex", alignItems: "center", gap: 4, background: COLORS.accent, color: "#fff",
                     border: "none", borderRadius: 999, padding: "8px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer",
                 } }, React.createElement(Plus, { size: 15 }), "追加")),
-        React.createElement("div", { style: { display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4, marginBottom: 8, WebkitOverflowScrolling: "touch" } },
-            ["all", "pending", "done"].map((s) => React.createElement("button", { key: s, onClick: () => setStatusFilter(s), style: {
-                    flexShrink: 0, fontSize: 12, fontWeight: 700, padding: "6px 13px", borderRadius: 999,
-                    border: `1px solid ${statusFilter === s ? COLORS.sage : COLORS.line}`,
-                    background: statusFilter === s ? COLORS.sageSoft : "transparent",
-                    color: statusFilter === s ? COLORS.sage : COLORS.inkSoft, whiteSpace: "nowrap",
-                } }, s === "all" ? "すべて" : s === "pending" ? "未対応" : "対応済み"))),
         printPeople.length > 0 && React.createElement("div", { style: { display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4, marginBottom: 16, WebkitOverflowScrolling: "touch" } },
             React.createElement("button", { onClick: () => setPersonFilter(null), style: {
                     flexShrink: 0, fontSize: 12, fontWeight: 700, padding: "6px 13px", borderRadius: 999,
@@ -144,7 +124,6 @@ function PhotoThumb({ url, onRemove, onView }) {
 function PrintForm({ initial, printPeople, onSave, onCancel, onAddPerson, saveError }) {
     const [title, setTitle] = useState(initial?.title || "");
     const [date, setDate] = useState(initial?.date || new Date().toISOString().slice(0, 10));
-    const [status, setStatus] = useState(initial?.status || "pending");
     const [personTags, setPersonTags] = useState(initial?.personTags || []);
     const [photos, setPhotos] = useState(initial?.photos || []);
     const [newPersonDraft, setNewPersonDraft] = useState("");
@@ -162,7 +141,7 @@ function PrintForm({ initial, printPeople, onSave, onCancel, onAddPerson, saveEr
     };
     const handleSave = async () => {
         setSaving(true);
-        await onSave({ ...(initial || {}), title: title.trim() || "無題のプリント", date, status, personTags, photos });
+        await onSave({ ...(initial || {}), title: title.trim() || "無題のプリント", date, personTags, photos });
         setSaving(false);
     };
     return React.createElement("div", { style: { padding: "16px 16px 100px" } },
@@ -178,14 +157,6 @@ function PrintForm({ initial, printPeople, onSave, onCancel, onAddPerson, saveEr
         React.createElement("input", { type: "date", value: date, onChange: (e) => setDate(e.target.value), style: {
                 width: "100%", padding: "11px 12px", borderRadius: 10, border: `1px solid ${COLORS.line}`, fontSize: 15, marginBottom: 16, boxSizing: "border-box",
             } }),
-        React.createElement("label", { style: { display: "block", fontSize: 12, fontWeight: 700, color: COLORS.inkSoft, margin: "0 0 6px" } }, "対応状況"),
-        React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 16 } },
-            ["pending", "done"].map((s) => React.createElement("button", { key: s, onClick: () => setStatus(s), style: {
-                    flex: 1, padding: "10px 0", borderRadius: 10, fontWeight: 700, fontSize: 13.5, cursor: "pointer",
-                    border: `1.5px solid ${status === s ? COLORS.sage : COLORS.line}`,
-                    background: status === s ? COLORS.sageSoft : "#fff",
-                    color: status === s ? COLORS.sage : COLORS.inkSoft,
-                } }, s === "pending" ? "未対応" : "対応済み"))),
         React.createElement("label", { style: { display: "block", fontSize: 12, fontWeight: 700, color: COLORS.inkSoft, margin: "0 0 6px" } }, "誰宛て(任意・複数選択可)"),
         React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 } },
             printPeople.map((p) => React.createElement("button", { key: p, onClick: () => togglePerson(p), style: {
@@ -291,7 +262,6 @@ function PrintDetailView({ print, onBack, onEdit, onDelete }) {
         React.createElement("h1", { style: { fontSize: 20, fontWeight: 800, margin: "0 0 8px", color: COLORS.ink } }, print.title),
         React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 18 } },
             print.date && React.createElement("span", { style: { fontSize: 13, color: COLORS.inkSoft } }, print.date),
-            React.createElement(StatusChip, { status: print.status }),
             (print.personTags || []).map((p) => React.createElement("span", { key: p, style: {
                     fontSize: 12, fontWeight: 700, color: COLORS.mustard, background: "#F5EDE1", borderRadius: 999, padding: "3px 10px",
                 } }, p))),
@@ -303,7 +273,7 @@ function PrintDetailView({ print, onBack, onEdit, onDelete }) {
 }
 
 // Top-level export used by LazyPrintsView in app.js.
-export function PrintsView({ printIndex, printsLoaded, printPeople, saveError, onSave, onDelete, onToggleStatus, onAddPerson, uref }) {
+export function PrintsView({ printIndex, printsLoaded, printPeople, saveError, onSave, onDelete, onAddPerson, uref }) {
     const [view, setView] = useState("list"); // list | add | edit | detail
     const [selectedId, setSelectedId] = useState(null);
     const [fullPrint, setFullPrint] = useState(null);
