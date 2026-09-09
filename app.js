@@ -1922,8 +1922,8 @@ function ItemCard({ item, groupsList, onToggle, onSetDueDate, onSetMemo, onOpenD
     const overdue = isOverdue(item.dueDate, item.done);
     const hasMemo = !!(item.memo && item.memo.trim());
     return React.createElement("div", {
-        style: { background: TODO_PALETTE.card, border: `1px solid ${TODO_PALETTE.line}`, borderRadius: 16, padding: "14px 13px",
-            boxShadow: "0 2px 10px rgba(51,48,42,0.035)",
+        style: { background: TODO_PALETTE.card, border: `1px solid ${TODO_PALETTE.line}`, borderRadius: RADIUS.cardSmall, padding: "14px 13px",
+            boxShadow: SHADOW.soft,
             display: "flex", alignItems: "flex-start", gap: 10, opacity: item.done ? 0.55 : 1, cursor: "pointer" },
         onClick: () => onOpenDetail(item.id)
     },
@@ -2751,9 +2751,8 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
                     setEditDraft(normalized);
                     setView("editRecipe");
                 }, confirmDelete: confirmDelete, onArmDelete: () => setConfirmDelete(true), onConfirmDelete: () => selected && handleDelete(selected.id), onCancelDelete: () => setConfirmDelete(false) }),
-            !loaded && (React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, color: COLORS.inkSoft, padding: 24 } },
-                React.createElement(Loader2, { size: 18, className: "spin" }),
-                React.createElement("span", null, "読み込み中..."))),
+            !loaded && (React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 } },
+                Array.from({ length: 6 }).map((_, i) => React.createElement(SkeletonGridCard, { key: i })))),
             loaded && view === "list" && (React.createElement(ListView, { recipes: filtered, total: recipes.length, query: query, setQuery: setQuery, categoryFilter: categoryFilter, setCategoryFilter: setCategoryFilter, meatTypeFilter: meatTypeFilter, setMeatTypeFilter: setMeatTypeFilter, noodleTypeFilter: noodleTypeFilter, setNoodleTypeFilter: setNoodleTypeFilter, vegTypeFilter: vegTypeFilter, setVegTypeFilter: setVegTypeFilter, soupTypeFilter: soupTypeFilter, setSoupTypeFilter: setSoupTypeFilter, availableCategories: availableCategories, applianceFilter: applianceFilter, setApplianceFilter: setApplianceFilter, availableAppliances: availableAppliances, favoriteOnly: favoriteOnly, setFavoriteOnly: setFavoriteOnly, viewMode: viewMode, setViewMode: changeViewMode, onAdd: (mode = "url") => { setAddMode(mode); setView("add"); }, onSelect: (id) => { setSelectedId(id); setView("detail"); setConfirmDelete(false); }, onDeleteRecipe: handleDelete, notice: urlImportNotice, onDismissNotice: () => setUrlImportNotice("") })),
             loaded && view === "calendar" && (React.createElement(LazyCalendarView, { recipes: recipes, mealPlan: mealPlan, onAddEntry: addMealPlanEntry, onRemoveEntry: removeMealPlanEntry, onSetDayEntries: setMealPlanEntries, onBack: () => setView("list"), onSelectRecipe: (id) => { setSelectedId(id); setDetailOrigin("calendar"); setView("detail"); setConfirmDelete(false); }, initialMode: calendarMode, onModeChange: setCalendarMode })),
             loaded && view === "add" && (React.createElement(AddView, { inputUrl: inputUrl, setInputUrl: setInputUrl, inputText: inputText, setInputText: setInputText, extractError: extractError, onExtract: handleExtract, extracting: extracting, draft: draft, setDraft: setDraft, onSave: handleSaveDraft, onDiscard: () => setDraft(null), saveError: saveError, ocrRunning: ocrRunning, ocrProgress: ocrProgress, ocrError: ocrError, onScreenshots: handleScreenshots, urlImporting: urlImporting, urlImportError: urlImportError, onUrlImport: handleUrlImport, apiKey: apiKey, addMode: addMode, categoryOrder: categoryOrder, applianceOrder: applianceOrder })),
@@ -2772,6 +2771,10 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
         }
         @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes slideInRight { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .page-enter { animation: slideInRight 220ms ease; }
+        .sheet-enter { animation: fadeUp 200ms ease; }
         input, textarea { font-family: inherit; }
         button { font-family: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
         button:active { transform: scale(0.985); }
@@ -3265,6 +3268,51 @@ function EmptyState({ onAdd }) {
                 fontSize: 14,
                 cursor: "pointer",
             } }, "\u6700\u521D\u306E\u30EC\u30B7\u30D4\u3092\u8FFD\u52A0")));
+}
+// Standalone component (not inlined) specifically so this stays simple to
+// verify — a shimmering placeholder shown in a 2-column grid while the
+// recipe list loads, instead of a bare spinner.
+// Shown once on first launch only (gated by localStorage in App below), a
+// standalone component kept simple/shallow on purpose so it's easy to
+// verify — same reasoning as SkeletonGridCard above.
+const ONBOARDING_PAGES = [
+    { title: "見つけたレシピを、\nひとつの場所に", body: "WebやSNSのレシピをまとめて保存。" },
+    { title: "写真からでも\nかんたん登録", body: "スクリーンショットやレシピ本から読み取れます。" },
+    { title: "献立から\n買い物まで", body: "作りたい料理を決めたら、材料を買い物リストへ。" },
+];
+function OnboardingFlow({ onFinish }) {
+    const [page, setPage] = useState(0);
+    const isLast = page === ONBOARDING_PAGES.length - 1;
+    const current = ONBOARDING_PAGES[page];
+    return React.createElement("div", { style: {
+            position: "fixed", inset: 0, zIndex: 200, background: COLORS.paper,
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+            padding: "24px", textAlign: "center",
+        } },
+        React.createElement("div", { style: {
+                width: 72, height: 72, borderRadius: "50%", background: COLORS.sageSoft,
+                display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 24,
+            } }, React.createElement(BookOpen, { size: 30, color: COLORS.sage })),
+        React.createElement("h2", { style: { fontSize: 22, fontWeight: 800, color: COLORS.ink, margin: "0 0 12px", whiteSpace: "pre-line", lineHeight: 1.4 } }, current.title),
+        React.createElement("p", { style: { fontSize: 14.5, color: COLORS.inkSoft, lineHeight: 1.8, margin: "0 0 32px", maxWidth: 280 } }, current.body),
+        React.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 32 } },
+            ONBOARDING_PAGES.map((_, i) => React.createElement("span", { key: i, style: {
+                    width: i === page ? 20 : 6, height: 6, borderRadius: 999,
+                    background: i === page ? COLORS.sage : COLORS.line, transition: "width 0.2s",
+                } }))),
+        React.createElement("button", { onClick: () => isLast ? onFinish() : setPage((p) => p + 1), style: {
+                width: "100%", maxWidth: 320, background: COLORS.sage, color: "#fff", border: "none",
+                borderRadius: RADIUS.button, padding: "14px 0", fontWeight: 700, fontSize: 15, cursor: "pointer",
+            } }, isLast ? "はじめる" : "次へ"),
+        !isLast && React.createElement("button", { onClick: onFinish, style: {
+                marginTop: 14, background: "none", border: "none", color: COLORS.inkSoft, fontSize: 13, cursor: "pointer",
+            } }, "スキップ"));
+}
+function SkeletonGridCard() {
+    return React.createElement("div", { style: { borderRadius: RADIUS.card, overflow: "hidden", background: COLORS.paperCard, boxShadow: SHADOW.soft } },
+        React.createElement("div", { className: "skeleton-shimmer", style: { width: "100%", aspectRatio: "4 / 3", background: COLORS.chipBg } }),
+        React.createElement("div", { style: { padding: "12px 13px 14px" } },
+            React.createElement("div", { className: "skeleton-shimmer", style: { height: 13, width: "80%", borderRadius: 5, background: COLORS.chipBg } })));
 }
 function RecipeGridCard({ recipe, onClick }) {
     return (React.createElement("div", { onClick: onClick, style: {
@@ -4048,7 +4096,7 @@ function DetailView({ recipe, loadingFull, onAddToShoppingList }) {
         setAddedToList(true);
         setTimeout(() => setAddedToList(false), 2000);
     };
-    return (React.createElement("div", null,
+    return (React.createElement("div", { className: "page-enter" },
         (recipe.imageUrl || recipe.imageUrl2 || recipe.imageUrl3) && (React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 18 } },
             recipe.imageUrl && React.createElement("img", { src: recipe.imageUrl, alt: "", onError: (e) => {
                     e.target.style.display = "none";
@@ -4378,6 +4426,23 @@ function SettingsPanel({
 
 function App() {
     useGoogleFonts();
+    const [showOnboarding, setShowOnboarding] = useState(() => {
+        try {
+            return !localStorage.getItem("onboardingSeen");
+        }
+        catch {
+            return false;
+        }
+    });
+    const finishOnboarding = () => {
+        setShowOnboarding(false);
+        try {
+            localStorage.setItem("onboardingSeen", "1");
+        }
+        catch {
+            // ignore — worst case it shows again once
+        }
+    };
     const [mode, setMode] = useState(() => {
         try {
             const saved = localStorage.getItem("appMode");
@@ -4912,6 +4977,7 @@ function App() {
         uref(`${listKey}-ungrouped-label`).set(label);
     }
     return (React.createElement("div", { style: { display: "flex", flexDirection: "column", height: "100dvh" } },
+        showOnboarding && React.createElement(OnboardingFlow, { onFinish: finishOnboarding }),
         React.createElement("div", { style: {
                 position: "fixed",
                 left: "50%",
