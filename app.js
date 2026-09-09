@@ -236,6 +236,20 @@ const COLORS = {
     accent: "#7F947C",
     accentSoft: "#E7EEE5",
     chipBg: "#F4F0E8",
+    // Feature accent colors — a distinct color per section (recipe/todo/
+    // shopping/prints), layered on top of the shared sage/ink/paper base
+    // rather than replacing it, so things like buttons, borders, and text
+    // stay on the established sage system while nav icons, the home
+    // dashboard's shortcut cards, and section headers use these to make
+    // each area visually distinct at a glance.
+    featureRecipe: "#D98E72",
+    featureRecipeSoft: "#F6E4DA",
+    featureTodo: "#6FA383",
+    featureTodoSoft: "#E1EEE6",
+    featureShopping: "#5B8FB0",
+    featureShoppingSoft: "#DFEAF1",
+    featurePrints: "#9B7FB5",
+    featurePrintsSoft: "#EBE3F2",
 };
 // Shared radius/shadow tokens per the redesign spec — pull from these
 // instead of hardcoding numbers so the whole app stays visually
@@ -1448,7 +1462,8 @@ function shoppingCategory(text) {
 }
 
 
-function ShoppingEmptyState() {
+function ShoppingEmptyState({ listKey }) {
+    const isTodo = listKey === "todo";
     return React.createElement("div", { style: {
             flex: 1,
             minHeight: 360,
@@ -1503,12 +1518,12 @@ function ShoppingEmptyState() {
                     fontWeight: 800,
                     color: TODO_PALETTE.ink,
                     marginBottom: 8
-                } }, "リストは空です"),
+                } }, isTodo ? "タスクはありません" : "リストは空です"),
             React.createElement("div", { style: {
                     fontSize: 13,
                     color: TODO_PALETTE.inkSoft,
                     lineHeight: 1.65
-                } }, "下の入力欄から買うものを追加してみましょう")
+                } }, isTodo ? "下の入力欄からやることを追加してみましょう" : "下の入力欄から買うものを追加してみましょう")
         )
     );
 }
@@ -1758,7 +1773,7 @@ function TodoApp({ initialListKey, myName, ungroupedLabels }) {
             React.createElement("div", { style: { fontFamily: TODO_FONT_DISPLAY, fontSize: 24, fontWeight: 800, letterSpacing: "0.01em" } }, LISTS[activeList].label),
             React.createElement("div", { style: { fontSize: 11, color: TODO_PALETTE.inkSoft, marginTop: 3 } }, dateStr)
         ),
-        React.createElement("div", { style: { marginTop: 10, fontSize: 11, color: TODO_PALETTE.inkSoft } }, "買うものを売り場ごとに自動でまとめています")
+        React.createElement("div", { style: { marginTop: 10, fontSize: 11, color: TODO_PALETTE.inkSoft } }, activeList === "todo" ? "やることを整理しています" : "買うものを売り場ごとに自動でまとめています")
     ), (currentGroups.length > 0 || recipeCount > 0) && React.createElement("div", { style: { display: "flex", gap: 6, padding: "0 14px 8px", overflowX: "auto", WebkitOverflowScrolling: "touch" } }, [
         { key: "all", label: `すべて (${remaining})` },
         ...(recipeCount > 0 ? [{ key: RECIPE_GROUP, label: `レシピ (${recipeCount})` }] : []),
@@ -1775,7 +1790,7 @@ function TodoApp({ initialListKey, myName, ungroupedLabels }) {
         placeholder: "キーワードで検索...",
         style: { width: "100%", boxSizing: "border-box", border: `1px solid ${TODO_PALETTE.line}`, borderRadius: 8, padding: "6px 10px", fontSize: 16, fontFamily: TODO_FONT_BODY, outline: "none", background: TODO_PALETTE.card } })), 
     // list
-    React.createElement("div", { style: { flex: 1, padding: "4px 14px 118px", display: "flex", flexDirection: "column", gap: 8 } }, readyLists[activeList] && visible.length === 0 && doneItems.length === 0 && React.createElement(ShoppingEmptyState, null), sections.map((sec, i) => React.createElement(React.Fragment, { key: sec.label }, React.createElement("div", { style: { fontSize: 11, color: TODO_PALETTE.inkSoft, fontWeight: 800, letterSpacing: "0.05em", margin: i === 0 ? "5px 3px 1px" : "14px 3px 1px" } }, sec.label), sec.items.map((t) => React.createElement(ItemCard, { key: t.id, item: t, groupsList: currentGroups,
+    React.createElement("div", { style: { flex: 1, padding: "4px 14px 118px", display: "flex", flexDirection: "column", gap: 8 } }, readyLists[activeList] && visible.length === 0 && doneItems.length === 0 && React.createElement(ShoppingEmptyState, { listKey: activeList }), sections.map((sec, i) => React.createElement(React.Fragment, { key: sec.label }, React.createElement("div", { style: { fontSize: 11, color: TODO_PALETTE.inkSoft, fontWeight: 800, letterSpacing: "0.05em", margin: i === 0 ? "5px 3px 1px" : "14px 3px 1px" } }, sec.label), sec.items.map((t) => React.createElement(ItemCard, { key: t.id, item: t, groupsList: currentGroups,
         onToggle: toggleItem, onDelete: deleteItem, onSetDueDate: setItemDueDate, onSetMemo: setItemMemo, onSetGroup: setItemGroup, onOpenDetail: setOpenDetailId })))),
     doneItems.length > 0 && React.createElement(React.Fragment, null,
         React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", margin: "14px 2px 6px" } },
@@ -2784,7 +2799,11 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
       `)));
 }
 function Header({ view, onBack, isFavorite, onToggleFavorite, onEdit, editDisabled, confirmDelete, onArmDelete, onConfirmDelete, onCancelDelete }) {
-    return (React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 22, minHeight: 48 } }, view !== "list" ? (React.createElement(React.Fragment, null,
+    // The calendar view has its own dedicated back button (in calendar.js),
+    // so this header's own "一覧へ" button would just be a second, redundant
+    // back control stacked right above it — skip rendering this header at
+    // all for that view.
+    return (React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 22, minHeight: 48 } }, view !== "list" && view !== "calendar" ? (React.createElement(React.Fragment, null,
         React.createElement("button", { onClick: onBack, style: {
                 background: "none",
                 border: "none",
@@ -3280,6 +3299,38 @@ const ONBOARDING_PAGES = [
     { title: "写真からでも\nかんたん登録", body: "スクリーンショットやレシピ本から読み取れます。" },
     { title: "献立から\n買い物まで", body: "作りたい料理を決めたら、材料を買い物リストへ。" },
 ];
+// Standalone component (like SkeletonGridCard/OnboardingFlow above) —
+// colorful shortcut cards to each feature, in the spirit of the reference
+// mockups, without needing to lift recipes/mealPlan/todos/shopping state
+// up out of their own components just for a preview. A safer starting
+// point than a fully "live data" dashboard; live previews per card is a
+// reasonable next step once this base is confirmed working.
+function HomeView({ myName, onNavigate }) {
+    const hour = new Date().getHours();
+    const greeting = hour < 11 ? "おはようございます" : hour < 17 ? "こんにちは" : "こんばんは";
+    const cards = [
+        { key: "recipe", label: "レシピ", desc: "保存したレシピを見る", icon: BookOpen, color: COLORS.featureRecipe, soft: COLORS.featureRecipeSoft },
+        { key: "calendar", label: "献立", desc: "今週の献立を立てる", icon: CalendarIcon, color: COLORS.featureRecipe, soft: COLORS.featureRecipeSoft },
+        { key: "todo", label: "ToDo", desc: "今日のやることを見る", icon: Check, color: COLORS.featureTodo, soft: COLORS.featureTodoSoft },
+        { key: "shopping", label: "買い物", desc: "買い物リストを見る", icon: ClipboardPaste, color: COLORS.featureShopping, soft: COLORS.featureShoppingSoft },
+        { key: "prints", label: "プリント", desc: "学校のプリントを見る", icon: FileText, color: COLORS.featurePrints, soft: COLORS.featurePrintsSoft },
+    ];
+    return React.createElement("div", { style: { padding: "20px 16px 24px" } },
+        React.createElement("p", { style: { fontSize: 13, color: COLORS.inkSoft, margin: "0 0 3px" } }, `${greeting}${myName ? `、${myName}さん` : ""}`),
+        React.createElement("h1", { style: { fontSize: 24, fontWeight: 800, color: COLORS.ink, margin: "0 0 20px" } }, "今日もすっきり暮らそう"),
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 } },
+            cards.map((c) => React.createElement("button", { key: c.key, onClick: () => onNavigate(c.key), style: {
+                    textAlign: "left", border: "none", background: COLORS.paperCard, borderRadius: RADIUS.card,
+                    padding: "16px 14px", boxShadow: SHADOW.soft, cursor: "pointer", display: "flex", flexDirection: "column", gap: 10,
+                } },
+                React.createElement("div", { style: {
+                        width: 40, height: 40, borderRadius: RADIUS.button, background: c.soft,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                    } }, React.createElement(c.icon, { size: 19, color: c.color })),
+                React.createElement("div", null,
+                    React.createElement("p", { style: { fontSize: 14.5, fontWeight: 800, color: COLORS.ink, margin: "0 0 2px" } }, c.label),
+                    React.createElement("p", { style: { fontSize: 11.5, color: COLORS.inkSoft, margin: 0 } }, c.desc))))));
+}
 function OnboardingFlow({ onFinish }) {
     const [page, setPage] = useState(0);
     const isLast = page === ONBOARDING_PAGES.length - 1;
@@ -4290,6 +4341,8 @@ function SettingsPanel({
     addGroup, deleteGroup, moveGroup,
     editingGroupId, editingGroupName, setEditingGroupName,
     startRenameGroup, saveRenameGroup,
+    todoGroups, newTodoGroupName, setNewTodoGroupName,
+    addTodoGroup, deleteTodoGroup, moveTodoGroup, saveRenameTodoGroup,
     ungroupedLabel, setUngroupedLabel, saveUngroupedLabel,
     exportBackup, importBackup,
     migrateEmbeddedPhotos, photoMigrationStatus,
@@ -4383,6 +4436,22 @@ function SettingsPanel({
                     React.createElement("div",{style:{display:"flex",gap:8,marginTop:12}},
                         React.createElement("input",{value:newGroupName,onChange:e=>setNewGroupName(e.target.value),onKeyDown:e=>e.key==="Enter"&&addGroup(),placeholder:"新しいグループ",style:{...input,flex:1}}),
                         React.createElement("button",{onClick:addGroup,style:action},"追加")))
+            ),
+            React.createElement("div",{style:card},
+                React.createElement("button",{onClick:()=>toggle("todoGroups"),style:row},
+                    React.createElement("div",{style:icon},"✓"),
+                    React.createElement("div",null,React.createElement("p",{style:title},"タスクのグループ"),React.createElement("p",{style:sub},"追加・名前変更・並び替え")),
+                    arrow("todoGroups")),
+                openSection==="todoGroups" && React.createElement("div",{style:editor},
+                    (todoGroups||[]).map((g,i)=>React.createElement("div",{key:g.id,style:{display:"flex",alignItems:"center",gap:6,padding:"8px 0",borderBottom:`1px solid ${COLORS.line}`}},
+                        editingGroupId===g.id?React.createElement("input",{autoFocus:true,value:editingGroupName,onChange:e=>setEditingGroupName(e.target.value),onKeyDown:e=>e.key==="Enter"&&saveRenameTodoGroup(),onBlur:saveRenameTodoGroup,style:{...input,flex:1,padding:"8px"}}):React.createElement("span",{style:{flex:1,fontSize:13.5,fontWeight:650}},g.name),
+                        React.createElement("button",{onClick:()=>moveTodoGroup(i,-1),disabled:i===0,style:{border:"none",background:"none",opacity:i===0?.25:1}},"↑"),
+                        React.createElement("button",{onClick:()=>moveTodoGroup(i,1),disabled:i===(todoGroups||[]).length-1,style:{border:"none",background:"none",opacity:i===(todoGroups||[]).length-1?.25:1}},"↓"),
+                        React.createElement("button",{onClick:()=>startRenameGroup(g.id,g.name),style:{border:"none",background:"none",color:COLORS.accent,fontWeight:700}},"編集"),
+                        React.createElement("button",{onClick:()=>deleteTodoGroup(g.id),style:{border:"none",background:"none",color:COLORS.plum}},"削除"))),
+                    React.createElement("div",{style:{display:"flex",gap:8,marginTop:12}},
+                        React.createElement("input",{value:newTodoGroupName,onChange:e=>setNewTodoGroupName(e.target.value),onKeyDown:e=>e.key==="Enter"&&addTodoGroup(),placeholder:"新しいグループ",style:{...input,flex:1}}),
+                        React.createElement("button",{onClick:addTodoGroup,style:action},"追加")))
             ),
             React.createElement("p",{style:sectionHeader},"プリント"),
             React.createElement("div",{style:card},
@@ -4995,25 +5064,30 @@ function App() {
                 backdropFilter: "blur(18px)",
                 WebkitBackdropFilter: "blur(18px)",
             } },
+            React.createElement("button", { onClick: () => switchMode("home"), style: {
+                    flex: 1, border: "none", background: "none", padding: "7px 0 5px",
+                    display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+                    fontSize: 10.5, fontWeight: 700, color: mode === "home" ? COLORS.ink : COLORS.inkSoft,
+                } }, React.createElement(GridIcon, { size: 21 }), "ホーム"),
             React.createElement("button", { onClick: () => { switchMode("recipe"); setRecipeInitialView("list"); setRecipeHomeToken((v) => v + 1); setShowSettings(false); }, style: {
                     flex: 1, border: "none", background: "none", padding: "7px 0 5px",
                     display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
-                    fontSize: 10.5, fontWeight: 700, color: mode === "recipe" && recipeInitialView === "list" ? COLORS.accent : COLORS.inkSoft,
+                    fontSize: 10.5, fontWeight: 700, color: mode === "recipe" && recipeInitialView === "list" ? COLORS.featureRecipe : COLORS.inkSoft,
                 } }, React.createElement(BookOpen, { size: 21 }), "レシピ"),
             React.createElement("button", { onClick: () => { switchMode("recipe"); setRecipeInitialView("calendar"); setRecipeHomeToken((v) => v + 1); setShowSettings(false); }, style: {
                     flex: 1, border: "none", background: "none", padding: "7px 0 5px",
                     display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
-                    fontSize: 10.5, fontWeight: 700, color: mode === "recipe" && recipeInitialView === "calendar" ? COLORS.accent : COLORS.inkSoft,
+                    fontSize: 10.5, fontWeight: 700, color: mode === "recipe" && recipeInitialView === "calendar" ? COLORS.featureRecipe : COLORS.inkSoft,
                 } }, React.createElement(CalendarIcon, { size: 21 }), "献立"),
             React.createElement("button", { onClick: () => switchMode("shopping"), style: {
                     flex: 1, border: "none", background: "none", padding: "7px 0 5px",
                     display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
-                    fontSize: 10.5, fontWeight: 700, color: (mode === "shopping" || mode === "todo") ? COLORS.accent : COLORS.inkSoft,
+                    fontSize: 10.5, fontWeight: 700, color: (mode === "shopping" || mode === "todo") ? COLORS.featureShopping : COLORS.inkSoft,
                 } }, React.createElement(ClipboardPaste, { size: 21 }), "買い物"),
             React.createElement("button", { onClick: () => switchMode("prints"), style: {
                     flex: 1, border: "none", background: "none", padding: "7px 0 5px",
                     display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
-                    fontSize: 10.5, fontWeight: 700, color: mode === "prints" ? COLORS.accent : COLORS.inkSoft,
+                    fontSize: 10.5, fontWeight: 700, color: mode === "prints" ? COLORS.featurePrints : COLORS.inkSoft,
                 } }, React.createElement(FileText, { size: 21 }), "プリント"),
             React.createElement("button", { onClick: () => setShowSettings(true), title: "設定", "aria-label": "設定", style: {
                     flex: 1, border: "none", background: "none", padding: "7px 0 5px",
@@ -5021,6 +5095,11 @@ function App() {
                     fontSize: 10.5, fontWeight: 700, color: COLORS.inkSoft,
                 } }, React.createElement(Settings, { size: 21 }), "設定")),
         React.createElement("div", { style: { flex: 1, minHeight: 0, overflowY: "auto", paddingBottom: "calc(70px + env(safe-area-inset-bottom, 0px))", background: COLORS.paper } },
+            mode === "home" && React.createElement(HomeView, { myName: myName, onNavigate: (key) => {
+                    if (key === "recipe") { switchMode("recipe"); setRecipeInitialView("list"); setRecipeHomeToken((v) => v + 1); }
+                    else if (key === "calendar") { switchMode("recipe"); setRecipeInitialView("calendar"); setRecipeHomeToken((v) => v + 1); }
+                    else { switchMode(key); }
+                } }),
             mode === "recipe" && React.createElement(RecipeNotebook, { key: recipeHomeToken, initialView: recipeInitialView, apiKey: apiKey, jinaApiKey: jinaApiKey, categoryOrder: categoryOrder, applianceOrder: applianceOrder }),
             // 買い物・ToDo は同じ画面の中の切り替えタブになった(以前は別々のタブ)。
             // どちらのモードで来ても同じ TodoApp を出し、内部の切り替えタブが
@@ -5048,6 +5127,13 @@ function App() {
             setEditingGroupName: setEditingGroupName,
             startRenameGroup: startRenameGroup,
             saveRenameGroup: () => saveRenameGroup("shopping"),
+            todoGroups: allGroups.todo || [],
+            newTodoGroupName: newGroupDraft.todo || "",
+            setNewTodoGroupName: (value) => setNewGroupDraft((prev) => ({ ...prev, todo: value })),
+            addTodoGroup: () => addGroupTo("todo"),
+            deleteTodoGroup: (id) => deleteGroupFrom("todo", id),
+            moveTodoGroup: (index, direction) => moveGroup("todo", index, direction),
+            saveRenameTodoGroup: () => saveRenameGroup("todo"),
             ungroupedLabel: editingUngroupedLabel.shopping || "",
             setUngroupedLabel: (value) => setEditingUngroupedLabel((prev) => ({ ...prev, shopping: value })),
             saveUngroupedLabel: () => saveUngroupedLabel("shopping"),
