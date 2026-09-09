@@ -5,18 +5,25 @@ import { FiCheck as Check, FiCrop as Crop, FiRotateCcw as RotateCcw, FiSkipForwa
 // or repositioning a photo (screenshot import, or editing a recipe's
 // photo) — rather than sitting in the main bundle for every page load.
 const COLORS = {
-    paper: "#F7F6F2",
+    paper: "#FAF8F3",
     paperCard: "#FFFFFF",
-    ink: "#20231F",
-    inkSoft: "#7E827C",
-    mustard: "#B18A57",
-    sage: "#6F806F",
-    sageSoft: "#E8EDE7",
-    plum: "#B86A68",
-    line: "#E7E5DF",
-    accent: "#6F806F",
-    accentSoft: "#E8EDE7",
-    chipBg: "#EEEDE8",
+    soft: "#F4F0E8",
+    ink: "#383631",
+    inkSoft: "#777269",
+    inkLight: "#A29D94",
+    mustard: "#C9856B",
+    sage: "#7F947C",
+    sageDark: "#637460",
+    sageSoft: "#E7EEE5",
+    plum: "#C66C66",
+    dangerSoft: "#F8E8E6",
+    cream: "#F3EBDD",
+    terracotta: "#C9856B",
+    terracottaLight: "#F5E7E0",
+    line: "#EAE5DC",
+    accent: "#7F947C",
+    accentSoft: "#E7EEE5",
+    chipBg: "#F4F0E8",
 };
 // photo-crop tool) rather than panning/zooming inside a fixed window.
 export function PhotoPositionEditor({ file, source, onCancel, onConfirm }) {

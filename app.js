@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createRoot } from "react-dom/client";
-import { FiPlus as Plus, FiSearch as Search, FiInstagram as Instagram, FiLink2 as Link2, FiTrash2 as Trash2, FiChevronLeft as ChevronLeft, FiChevronDown as ChevronDown, FiLoader as Loader2, FiClipboard as ClipboardPaste, FiX as X, FiCheck as Check, FiAlertCircle as AlertCircle, FiBookOpen as BookOpen, FiCamera as Camera, FiMinus as Minus, FiRotateCcw as RotateCcw, FiRepeat as Repeat, FiEdit2 as Edit2, FiSettings as Settings, FiMenu as Menu, FiBookmark as Bookmark, FiGrid as GridIcon, FiList as ListIcon, FiCalendar as CalendarIcon, FiArrowUp as ArrowUp, FiFileText as FileText, } from "react-icons/fi";
+import { FiPlus as Plus, FiSearch as Search, FiInstagram as Instagram, FiLink2 as Link2, FiTrash2 as Trash2, FiChevronLeft as ChevronLeft, FiChevronDown as ChevronDown, FiLoader as Loader2, FiClipboard as ClipboardPaste, FiX as X, FiCheck as Check, FiAlertCircle as AlertCircle, FiBookOpen as BookOpen, FiCamera as Camera, FiMinus as Minus, FiRotateCcw as RotateCcw, FiRepeat as Repeat, FiEdit2 as Edit2, FiSettings as Settings, FiBookmark as Bookmark, FiGrid as GridIcon, FiList as ListIcon, FiCalendar as CalendarIcon, FiArrowUp as ArrowUp, FiFileText as FileText, FiMoreHorizontal as MoreHorizontal, } from "react-icons/fi";
 // tesseract.js is a large OCR library (WASM engine + language data) that's
 // only needed for the "screenshot" recipe-import path. Importing it
 // statically here would force every app launch to download and parse it
@@ -210,20 +210,38 @@ function useGoogleFonts() {
         return () => links.forEach((l) => l.remove());
     }, []);
 }
+// Design tokens per the redesign spec (北欧×暮らし×大人かわいい). Existing
+// key names (paper, ink, sage, plum, etc.) are kept as-is so every
+// component that already references COLORS.xxx keeps working unchanged —
+// only the underlying values move to the new palette. A few new keys are
+// added for elements the spec calls out that didn't have a color before
+// (cream, terracotta, dangerSoft, sageDark, inkLight).
 const COLORS = {
     paper: "#FAF8F3",
     paperCard: "#FFFFFF",
+    soft: "#F4F0E8",
     ink: "#383631",
     inkSoft: "#777269",
-    mustard: "#B69768",
+    inkLight: "#A29D94",
+    mustard: "#C9856B",
     sage: "#7F947C",
+    sageDark: "#637460",
     sageSoft: "#E7EEE5",
-    plum: "#C9856B",
+    plum: "#C66C66",
+    dangerSoft: "#F8E8E6",
+    cream: "#F3EBDD",
+    terracotta: "#C9856B",
+    terracottaLight: "#F5E7E0",
     line: "#EAE5DC",
     accent: "#7F947C",
     accentSoft: "#E7EEE5",
-    chipBg: "#F3EFE8",
+    chipBg: "#F4F0E8",
 };
+// Shared radius/shadow tokens per the redesign spec — pull from these
+// instead of hardcoding numbers so the whole app stays visually
+// consistent as more screens get restyled.
+const RADIUS = { card: 22, cardSmall: 17, button: 16, input: 15, chip: 999, image: 20 };
+const SHADOW = { soft: "0 2px 12px rgba(65,55,45,0.05)", lifted: "0 5px 24px rgba(65,55,45,0.08)" };
 function detectSource(url) {
     if (!url)
         return "other";
@@ -2697,7 +2715,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
         React.createElement("div", { style: {
                 width: "100%",
                 maxWidth: 520,
-                padding: "calc(6px + env(safe-area-inset-top, 0px)) 16px 118px",
+                padding: "22px 18px 118px",
             } },
             React.createElement(Header, { view: view, onBack: () => { setView(view === "detail" ? detailOrigin : "list"); setDetailOrigin("list"); resetAddForm(); setConfirmDelete(false); }, isFavorite: !!selected?.favorite, onToggleFavorite: () => selected && toggleFavorite(selected), editDisabled: fullRecipeLoading, onEdit: () => {
                     // Guard against opening the editor before the full
@@ -2729,7 +2747,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
             !loaded && (React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, color: COLORS.inkSoft, padding: 24 } },
                 React.createElement(Loader2, { size: 18, className: "spin" }),
                 React.createElement("span", null, "\u8AAD\u307F\u8FBC\u307F\u4E2D..."))),
-            loaded && view === "list" && (React.createElement(ListView, { recipes: filtered, total: recipes.length, mealPlan: mealPlan, onOpenCalendar: () => setView("calendar"), query: query, setQuery: setQuery, categoryFilter: categoryFilter, setCategoryFilter: setCategoryFilter, meatTypeFilter: meatTypeFilter, setMeatTypeFilter: setMeatTypeFilter, noodleTypeFilter: noodleTypeFilter, setNoodleTypeFilter: setNoodleTypeFilter, vegTypeFilter: vegTypeFilter, setVegTypeFilter: setVegTypeFilter, soupTypeFilter: soupTypeFilter, setSoupTypeFilter: setSoupTypeFilter, availableCategories: availableCategories, applianceFilter: applianceFilter, setApplianceFilter: setApplianceFilter, availableAppliances: availableAppliances, favoriteOnly: favoriteOnly, setFavoriteOnly: setFavoriteOnly, viewMode: viewMode, setViewMode: changeViewMode, onAdd: (mode = "url") => { setAddMode(mode); setView("add"); }, onSelect: (id) => { setSelectedId(id); setView("detail"); setConfirmDelete(false); }, onDeleteRecipe: handleDelete, notice: urlImportNotice, onDismissNotice: () => setUrlImportNotice("") })),
+            loaded && view === "list" && (React.createElement(ListView, { recipes: filtered, total: recipes.length, query: query, setQuery: setQuery, categoryFilter: categoryFilter, setCategoryFilter: setCategoryFilter, meatTypeFilter: meatTypeFilter, setMeatTypeFilter: setMeatTypeFilter, noodleTypeFilter: noodleTypeFilter, setNoodleTypeFilter: setNoodleTypeFilter, vegTypeFilter: vegTypeFilter, setVegTypeFilter: setVegTypeFilter, soupTypeFilter: soupTypeFilter, setSoupTypeFilter: setSoupTypeFilter, availableCategories: availableCategories, applianceFilter: applianceFilter, setApplianceFilter: setApplianceFilter, availableAppliances: availableAppliances, favoriteOnly: favoriteOnly, setFavoriteOnly: setFavoriteOnly, viewMode: viewMode, setViewMode: changeViewMode, onAdd: (mode = "url") => { setAddMode(mode); setView("add"); }, onSelect: (id) => { setSelectedId(id); setView("detail"); setConfirmDelete(false); }, onDeleteRecipe: handleDelete, notice: urlImportNotice, onDismissNotice: () => setUrlImportNotice("") })),
             loaded && view === "calendar" && (React.createElement(LazyCalendarView, { recipes: recipes, mealPlan: mealPlan, onAddEntry: addMealPlanEntry, onRemoveEntry: removeMealPlanEntry, onSetDayEntries: setMealPlanEntries, onBack: () => setView("list"), onSelectRecipe: (id) => { setSelectedId(id); setDetailOrigin("calendar"); setView("detail"); setConfirmDelete(false); }, initialMode: calendarMode, onModeChange: setCalendarMode })),
             loaded && view === "add" && (React.createElement(AddView, { inputUrl: inputUrl, setInputUrl: setInputUrl, inputText: inputText, setInputText: setInputText, extractError: extractError, onExtract: handleExtract, extracting: extracting, draft: draft, setDraft: setDraft, onSave: handleSaveDraft, onDiscard: () => setDraft(null), saveError: saveError, ocrRunning: ocrRunning, ocrProgress: ocrProgress, ocrError: ocrError, onScreenshots: handleScreenshots, urlImporting: urlImporting, urlImportError: urlImportError, onUrlImport: handleUrlImport, apiKey: apiKey, addMode: addMode, categoryOrder: categoryOrder, applianceOrder: applianceOrder })),
             loaded && view === "detail" && selected && (React.createElement(DetailView, { recipe: full, loadingFull: fullRecipeLoading, onAddToShoppingList: addToShoppingList })),
@@ -2742,14 +2760,14 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         input, textarea { font-family: inherit; }
         button { font-family: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
-        button:active { transform: scale(0.98); }
+        button:active { transform: scale(0.985); }
         input, textarea, select { -webkit-appearance: none; }
         * { -webkit-tap-highlight-color: transparent; }
         ::selection { background: ${COLORS.accent}55; }
       `)));
 }
 function Header({ view, onBack, isFavorite, onToggleFavorite, onEdit, editDisabled, confirmDelete, onArmDelete, onConfirmDelete, onCancelDelete }) {
-    return (React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 8, minHeight: 38 } }, view !== "list" ? (React.createElement(React.Fragment, null,
+    return (React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 22, minHeight: 48 } }, view !== "list" ? (React.createElement(React.Fragment, null,
         React.createElement("button", { onClick: onBack, style: {
                 background: "none",
                 border: "none",
@@ -2773,16 +2791,16 @@ function Header({ view, onBack, isFavorite, onToggleFavorite, onEdit, editDisabl
                 React.createElement(Edit2, { size: 18, color: COLORS.inkSoft })),
             React.createElement("button", { onClick: onArmDelete, "aria-label": "\u524A\u9664", style: { background: "none", border: "none", padding: 8, cursor: "pointer", display: "flex" } },
                 React.createElement(Trash2, { size: 18, color: COLORS.inkSoft }))))))) : (React.createElement(React.Fragment, null,
-        React.createElement("div", { style: { display: "flex", alignItems: "center", minHeight: 38 } },
+        React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 3 } },
+            React.createElement("div", { style: { fontSize: 10, letterSpacing: "0.18em", fontWeight: 700, color: COLORS.sage } }, "MY KITCHEN"),
             React.createElement("h1", { style: {
                     fontFamily: "'Noto Sans JP', sans-serif",
-                    fontSize: 29,
-                    fontWeight: 800,
+                    fontSize: 27,
+                    fontWeight: 700,
                     margin: 0,
-                    letterSpacing: "-0.035em",
+                    letterSpacing: "-0.04em",
                     lineHeight: 1.18,
-                    color: COLORS.ink,
-                } }, "今日、なに作る？"))))));
+                } }, "\u30EC\u30B7\u30D4\u30CE\u30FC\u30C8"))))));
 }
 function groupByDishCategory(recipes) {
     const groups = {};
@@ -2817,7 +2835,7 @@ function groupByDishCategory(recipes) {
         return { cat, subGroups: null, items };
     });
 }
-function ListView({ recipes, total, mealPlan, onOpenCalendar, query, setQuery, categoryFilter, setCategoryFilter, meatTypeFilter, setMeatTypeFilter, noodleTypeFilter, setNoodleTypeFilter, vegTypeFilter, setVegTypeFilter, soupTypeFilter, setSoupTypeFilter, availableCategories, applianceFilter, setApplianceFilter, availableAppliances, favoriteOnly, setFavoriteOnly, viewMode, setViewMode, onAdd, onSelect, onDeleteRecipe, notice, onDismissNotice, }) {
+function ListView({ recipes, total, query, setQuery, categoryFilter, setCategoryFilter, meatTypeFilter, setMeatTypeFilter, noodleTypeFilter, setNoodleTypeFilter, vegTypeFilter, setVegTypeFilter, soupTypeFilter, setSoupTypeFilter, availableCategories, applianceFilter, setApplianceFilter, availableAppliances, favoriteOnly, setFavoriteOnly, viewMode, setViewMode, onAdd, onSelect, onDeleteRecipe, notice, onDismissNotice, }) {
     useEffect(() => {
         if (!notice)
             return;
@@ -2826,27 +2844,13 @@ function ListView({ recipes, total, mealPlan, onOpenCalendar, query, setQuery, c
     }, [notice]);
     const [showQuickAdd, setShowQuickAdd] = useState(false);
     const [showApplianceFilter, setShowApplianceFilter] = useState(false);
-    const [showAllRecipes, setShowAllRecipes] = useState(false);
     const quickAddItems = [
-        { label: "URLから追加", icon: Link2, mode: "url", sub: "Webのレシピを読み取る" },
-        { label: "画像から追加", icon: GridIcon, mode: "image", sub: "スクショ・保存画像から" },
-        { label: "撮影して追加", icon: Camera, mode: "camera", sub: "レシピ本などを撮影" },
-        { label: "テキストから", icon: ClipboardPaste, mode: "text", sub: "SNSの投稿文やメモから" },
-        { label: "手動で入力", icon: Edit2, mode: "manual", sub: "自分でレシピを登録" },
+        { label: "URLから追加", icon: Link2, mode: "url" },
+        { label: "画像から追加", icon: GridIcon, mode: "image" },
+        { label: "撮影して追加", icon: Camera, mode: "camera" },
+        { label: "テキストから", icon: ClipboardPaste, mode: "text" },
+        { label: "手動で入力", icon: Edit2, mode: "manual" },
     ];
-    const isHomeState = !query.trim() && !categoryFilter && !applianceFilter && !favoriteOnly;
-    const recentRecipes = recipes.slice(0, 4);
-    const favoriteRecipes = recipes.filter((r) => r.favorite).slice(0, 4);
-    const today = new Date();
-    const weekDays = Array.from({ length: 7 }, (_, i) => {
-        const d = new Date(today);
-        d.setDate(today.getDate() + i);
-        const y = d.getFullYear();
-        const m = String(d.getMonth() + 1).padStart(2, "0");
-        const day = String(d.getDate()).padStart(2, "0");
-        const key = `${y}-${m}-${day}`;
-        return { key, label: ["日","月","火","水","木","金","土"][d.getDay()], date: `${d.getMonth()+1}/${d.getDate()}`, entries: mealPlan?.[key] || [] };
-    });
     return (React.createElement("div", { style: { paddingBottom: 24 } },
         notice && React.createElement("div", { onClick: onDismissNotice, style: {
                 display: "flex", alignItems: "center", gap: 8, background: COLORS.accentSoft, color: COLORS.accent,
@@ -2854,7 +2858,7 @@ function ListView({ recipes, total, mealPlan, onOpenCalendar, query, setQuery, c
             } },
             React.createElement(Check, { size: 15, style: { flexShrink: 0 } }),
             React.createElement("span", { style: { flex: 1 } }, notice)),
-        React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 10 } },
+        React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 12 } },
             React.createElement("div", { style: {
                     flex: 1,
                     minWidth: 0,
@@ -2862,10 +2866,9 @@ function ListView({ recipes, total, mealPlan, onOpenCalendar, query, setQuery, c
                     alignItems: "center",
                     gap: 8,
                     background: "#fff",
-                    borderRadius: 16,
-                    padding: "12px 14px",
-                    border: `1px solid ${COLORS.line}`,
-                    boxShadow: "0 4px 18px rgba(65,55,45,0.045)",
+                    borderRadius: 999,
+                    padding: "11px 16px",
+                    boxShadow: "0 1px 4px rgba(46,42,36,0.06)",
                 } },
                 React.createElement(Search, { size: 16, color: COLORS.inkSoft, style: { flexShrink: 0 } }),
                 React.createElement("input", { value: query, onChange: (e) => setQuery(e.target.value), placeholder: "\u30EC\u30B7\u30D4\u3092\u691C\u7D22", style: {
@@ -2887,9 +2890,8 @@ function ListView({ recipes, total, mealPlan, onOpenCalendar, query, setQuery, c
                     justifyContent: "center",
                     background: "#fff",
                     border: "none",
-                    borderRadius: 14,
-                    border: `1px solid ${COLORS.line}`,
-                    boxShadow: "0 4px 18px rgba(65,55,45,0.045)",
+                    borderRadius: "50%",
+                    boxShadow: "0 1px 4px rgba(46,42,36,0.06)",
                     cursor: "pointer",
                 } }, viewMode === "grid" ? React.createElement(ListIcon, { size: 17, color: COLORS.inkSoft }) : React.createElement(GridIcon, { size: 17, color: COLORS.inkSoft })),
             React.createElement("button", { onClick: () => setFavoriteOnly((v) => !v), title: "\u30D6\u30C3\u30AF\u30DE\u30FC\u30AF\u3060\u3051\u8868\u793A", "aria-label": "\u30D6\u30C3\u30AF\u30DE\u30FC\u30AF\u3060\u3051\u8868\u793A", style: {
@@ -2901,16 +2903,15 @@ function ListView({ recipes, total, mealPlan, onOpenCalendar, query, setQuery, c
                     justifyContent: "center",
                     background: favoriteOnly ? COLORS.accent : "#fff",
                     border: "none",
-                    borderRadius: 14,
-                    border: `1px solid ${COLORS.line}`,
-                    boxShadow: "0 4px 18px rgba(65,55,45,0.045)",
+                    borderRadius: "50%",
+                    boxShadow: "0 1px 4px rgba(46,42,36,0.06)",
                     cursor: "pointer",
                 } },
                 React.createElement(Bookmark, { size: 17, color: favoriteOnly ? "#fff" : COLORS.inkSoft }))),
         favoriteOnly && (React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 6, marginBottom: 12, fontSize: 12, color: COLORS.accent, fontWeight: 700 } },
             React.createElement(Bookmark, { size: 13 }),
             " \u30D6\u30C3\u30AF\u30DE\u30FC\u30AF\u3057\u305F\u30EC\u30B7\u30D4\u306E\u307F\u8868\u793A\u4E2D")),
-        availableAppliances.length > 0 && (React.createElement("div", { style: { marginBottom: 10 } },
+        availableAppliances.length > 0 && (React.createElement("div", { style: { marginBottom: 14 } },
             React.createElement("button", { onClick: () => setShowApplianceFilter((v) => !v), style: {
                     display: "inline-flex",
                     alignItems: "center",
@@ -2964,7 +2965,7 @@ function ListView({ recipes, total, mealPlan, onOpenCalendar, query, setQuery, c
                 gap: 8,
                 overflowX: "auto",
                 paddingBottom: 4,
-                marginBottom: 12,
+                marginBottom: 16,
                 WebkitOverflowScrolling: "touch",
             } },
             React.createElement("button", { onClick: () => { setCategoryFilter(null); setMeatTypeFilter(null); setNoodleTypeFilter(null); setVegTypeFilter(null); }, style: {
@@ -3116,55 +3117,57 @@ function ListView({ recipes, total, mealPlan, onOpenCalendar, query, setQuery, c
                     fontWeight: 700,
                     whiteSpace: "nowrap",
                 } }, st))))),
-        total === 0 ? (React.createElement(EmptyState, { onAdd: onAdd })) : isHomeState && !showAllRecipes ? (React.createElement(React.Fragment, null,
-            React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", margin: "4px 2px 10px" } },
-                React.createElement("h2", { style: { margin: 0, fontSize: 19, fontWeight: 800, letterSpacing: "-0.02em" } }, "最近のレシピ"),
-                recipes.length > 4 && React.createElement("button", { onClick: () => setShowAllRecipes(true), style: { border: "none", background: "none", color: COLORS.accent, fontWeight: 800, fontSize: 12.5, padding: 6 } }, "すべて見る ›")),
-            React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 } }, recentRecipes.map((r) => React.createElement(RecipeGridCard, { key: r.id, recipe: r, onClick: () => onSelect(r.id) }))),
-            React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", margin: "24px 2px 10px" } },
-                React.createElement("h2", { style: { margin: 0, fontSize: 19, fontWeight: 800, letterSpacing: "-0.02em" } }, "今週の献立"),
-                React.createElement("button", { onClick: onOpenCalendar, style: { border: "none", background: "none", color: COLORS.accent, fontWeight: 800, fontSize: 12.5, padding: 6 } }, "カレンダーを見る ›")),
-            React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 6, marginBottom: 10 } }, weekDays.map((d, i) => React.createElement("button", { key: d.key, onClick: onOpenCalendar, style: { border: "none", borderRadius: 14, padding: "9px 2px", background: i === 0 ? COLORS.accent : "#fff", color: i === 0 ? "#fff" : COLORS.inkSoft, boxShadow: i === 0 ? "none" : "0 2px 10px rgba(65,55,45,.04)", fontSize: 11, lineHeight: 1.25, fontWeight: 700 } }, React.createElement("div", null, d.label), React.createElement("div", { style: { marginTop: 3, fontSize: 10.5 } }, d.date)))),
-            React.createElement("button", { onClick: onOpenCalendar, style: { width: "100%", border: `1px solid ${COLORS.line}`, background: "#fff", borderRadius: 18, padding: "13px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", textAlign: "left", boxShadow: "0 4px 18px rgba(65,55,45,.04)" } },
-                React.createElement("div", null, React.createElement("div", { style: { fontSize: 14, fontWeight: 800, color: COLORS.ink } }, weekDays[0].entries.length ? `${weekDays[0].entries.length}品の献立` : "今日の献立"), React.createElement("div", { style: { fontSize: 12, color: COLORS.inkSoft, marginTop: 3 } }, weekDays[0].entries.length ? weekDays[0].entries.map(e => e.title).filter(Boolean).slice(0,2).join("・") : "タップしてメニューを追加できます")),
-                React.createElement("span", { style: { minWidth: 96, height: 38, borderRadius: 13, background: COLORS.accent, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, fontSize: 12.5, fontWeight: 800 } }, React.createElement(Plus, { size: 17 }), "献立を追加")),
-            favoriteRecipes.length > 0 && React.createElement(React.Fragment, null,
-                React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", margin: "24px 2px 10px" } }, React.createElement("h2", { style: { margin: 0, fontSize: 19, fontWeight: 800 } }, "お気に入り"), React.createElement("button", { onClick: () => setFavoriteOnly(true), style: { border: "none", background: "none", color: COLORS.accent, fontWeight: 800, fontSize: 12.5, padding: 6 } }, "すべて見る ›")),
-                React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 } }, favoriteRecipes.map((r) => React.createElement(RecipeGridCard, { key: r.id, recipe: r, onClick: () => onSelect(r.id) }))))
-        )) : recipes.length === 0 ? (React.createElement("p", { style: { color: COLORS.inkSoft, fontSize: 14, padding: "20px 4px" } }, query.trim() && categoryFilter
+        total === 0 ? (React.createElement(EmptyState, { onAdd: onAdd })) : recipes.length === 0 ? (React.createElement("p", { style: { color: COLORS.inkSoft, fontSize: 14, padding: "20px 4px" } }, query.trim() && categoryFilter
             ? `「${categoryFilter}」の中に「${query}」に一致するレシピが見つかりませんでした。`
             : query.trim()
                 ? `「${query}」に一致するレシピが見つかりませんでした。`
-                : `「${categoryFilter || "この条件"}」のレシピはまだありません。`)) : (React.createElement(React.Fragment, null,
-            showAllRecipes && React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", margin: "2px 2px 10px" } }, React.createElement("h2", { style: { margin: 0, fontSize: 19, fontWeight: 800 } }, "すべてのレシピ"), React.createElement("button", { onClick: () => setShowAllRecipes(false), style: { border: "none", background: "none", color: COLORS.accent, fontWeight: 800, fontSize: 12.5 } }, "ホームに戻る")),
-            viewMode === "grid" ? React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 } }, recipes.map((r) => React.createElement(RecipeGridCard, { key: r.id, recipe: r, onClick: () => onSelect(r.id) }))) : React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10 } }, recipes.map((r) => React.createElement(RecipeListCard, { key: r.id, recipe: r, onClick: () => onSelect(r.id) }))))),
-        showQuickAdd && React.createElement("div", { onClick: () => setShowQuickAdd(false), style: { position: "fixed", inset: 0, background: "rgba(32,35,31,0.28)", zIndex: 80 } }),
-        showQuickAdd && React.createElement("div", { style: { position: "fixed", left: "50%", transform: "translateX(-50%)", bottom: 0, width: "100%", maxWidth: 520, zIndex: 90, background: "#fff", borderRadius: "24px 24px 0 0", padding: "10px 16px calc(18px + env(safe-area-inset-bottom, 0px))", boxShadow: "0 -12px 36px rgba(32,35,31,.16)" } },
-            React.createElement("div", { style: { width: 38, height: 4, borderRadius: 999, background: COLORS.line, margin: "0 auto 14px" } }),
-            React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 } }, React.createElement("h3", { style: { margin: 0, fontSize: 20, fontWeight: 800 } }, "レシピを追加"), React.createElement("button", { onClick: () => setShowQuickAdd(false), style: { border: "none", background: COLORS.chipBg, width: 34, height: 34, borderRadius: 12, fontSize: 20, color: COLORS.inkSoft } }, "×")),
-            quickAddItems.map((item) => { const Icon = item.icon; return React.createElement("button", { key: item.label, onClick: () => { setShowQuickAdd(false); onAdd(item.mode); }, style: { width: "100%", border: "none", borderBottom: `1px solid ${COLORS.line}`, background: "transparent", padding: "12px 2px", display: "flex", alignItems: "center", gap: 12, textAlign: "left" } }, React.createElement("span", { style: { width: 42, height: 42, borderRadius: 14, background: COLORS.accentSoft, color: COLORS.accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 } }, React.createElement(Icon, { size: 20 })), React.createElement("span", { style: { flex: 1 } }, React.createElement("span", { style: { display: "block", fontSize: 14, fontWeight: 800, color: COLORS.ink } }, item.label), React.createElement("span", { style: { display: "block", marginTop: 2, fontSize: 11.5, color: COLORS.inkSoft } }, item.sub)), React.createElement(ChevronRight, { size: 17, color: COLORS.inkSoft })); })
-        ),
+                : `「${categoryFilter}」のレシピはまだありません。`)) : viewMode === "grid" ? (React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 } }, recipes.map((r) => (React.createElement(RecipeGridCard, { key: r.id, recipe: r, onClick: () => onSelect(r.id) }))))) : (React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10 } }, recipes.map((r) => (React.createElement(RecipeListCard, { key: r.id, recipe: r, onClick: () => onSelect(r.id) }))))),
+        showQuickAdd && React.createElement("div", { onClick: () => setShowQuickAdd(false), style: {
+                position: "fixed", inset: 0, background: "rgba(32,35,31,0.20)", zIndex: 80
+            } }),
+        showQuickAdd && React.createElement("div", { style: {
+                position: "fixed",
+                right: "max(20px, calc(50% - 238px))",
+                bottom: "calc(154px + env(safe-area-inset-bottom, 0px))",
+                zIndex: 90,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "flex-end",
+                gap: 10,
+            } }, quickAddItems.map((item) => {
+                const Icon = item.icon;
+                return React.createElement("button", { key: item.label, onClick: () => { setShowQuickAdd(false); onAdd(item.mode); }, style: {
+                        border: "none", background: "transparent", padding: 0, display: "flex", alignItems: "center", gap: 10
+                    } },
+                    React.createElement("span", { style: {
+                            background: "rgba(255,255,255,0.98)", color: COLORS.ink, borderRadius: 12, padding: "8px 12px",
+                            fontSize: 13, fontWeight: 700, boxShadow: "0 6px 22px rgba(32,35,31,0.12)", whiteSpace: "nowrap"
+                        } }, item.label),
+                    React.createElement("span", { style: {
+                            width: 48, height: 48, borderRadius: "50%", background: COLORS.accent, color: "#fff",
+                            display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 8px 24px rgba(67,84,69,0.28)"
+                        } }, React.createElement(Icon, { size: 21 }))
+                );
+            })),
         React.createElement("button", { onClick: () => setShowQuickAdd((v) => !v), style: {
                 position: "fixed",
                 right: "max(20px, calc(50% - 238px))",
                 bottom: "calc(82px + env(safe-area-inset-bottom, 0px))",
-                minWidth: 58,
-                height: 50,
-                padding: "0 16px",
-                borderRadius: 16,
+                width: 58,
+                height: 58,
+                borderRadius: "50%",
                 background: COLORS.accent,
                 color: "#fff",
                 border: "none",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                boxShadow: "0 8px 22px rgba(67,84,69,0.22)",
+                boxShadow: "0 10px 28px rgba(67,84,69,0.28)",
                 zIndex: 100,
                 transform: showQuickAdd ? "rotate(45deg)" : "rotate(0deg)",
                 transition: "transform 180ms ease",
             }, "aria-label": showQuickAdd ? "追加メニューを閉じる" : "レシピを追加" },
-            React.createElement(Plus, { size: 24 }),
-            !showQuickAdd && React.createElement("span", { style: { marginLeft: 7, fontSize: 13, fontWeight: 800 } }, "追加"))));
+            React.createElement(Plus, { size: 26 }))));
 }
 // Same on-demand pattern as LazyCalendarView, for the photo crop/position
 // editors — only needed while someone is actively adjusting a photo.
@@ -3249,24 +3252,23 @@ function EmptyState({ onAdd }) {
 }
 function RecipeGridCard({ recipe, onClick }) {
     return (React.createElement("div", { onClick: onClick, style: {
-            borderRadius: 18,
+            borderRadius: 22,
             overflow: "hidden",
             background: "#fff",
-            border: `1px solid ${COLORS.line}`,
-            boxShadow: "0 3px 14px rgba(65,55,45,0.055)",
+            boxShadow: "0 8px 26px rgba(32,35,31,0.075)",
             cursor: "pointer",
         } },
         React.createElement("div", { style: {
                 width: "100%",
-                aspectRatio: "1 / 1",
+                aspectRatio: "4 / 5",
                 background: COLORS.chipBg,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
             } }, (recipe.imageUrl || recipe.imageUrl2 || recipe.imageUrl3) ? (React.createElement("img", { src: recipe.imageUrl || recipe.imageUrl2 || recipe.imageUrl3, alt: "", onError: (e) => {
                 e.target.style.display = "none";
-            }, style: { width: "100%", height: "100%", objectFit: "cover" } })) : (React.createElement("span", { style: { fontSize: 11, color: COLORS.inkSoft, opacity: 0.6 } }, "写真なし"))),
-        React.createElement("div", { style: { padding: "10px 11px 12px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 6 } },
+            }, style: { width: "100%", height: "100%", objectFit: "cover" } })) : (React.createElement("span", { style: { fontSize: 11, color: COLORS.inkSoft, opacity: 0.6 } }, "No Photo"))),
+        React.createElement("div", { style: { padding: "12px 13px 14px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 6 } },
             React.createElement("h3", { style: {
                     fontFamily: "'Noto Sans JP', sans-serif",
                     fontSize: 14,
@@ -3301,7 +3303,7 @@ function RecipeListCard({ recipe, onClick }) {
                 justifyContent: "center",
             } }, (recipe.imageUrl || recipe.imageUrl2 || recipe.imageUrl3) ? (React.createElement("img", { src: recipe.imageUrl || recipe.imageUrl2 || recipe.imageUrl3, alt: "", onError: (e) => {
                 e.target.style.display = "none";
-            }, style: { width: "100%", height: "100%", objectFit: "cover" } })) : (React.createElement("span", { style: { fontSize: 9.5, color: COLORS.inkSoft, opacity: 0.6 } }, "写真なし"))),
+            }, style: { width: "100%", height: "100%", objectFit: "cover" } })) : (React.createElement("span", { style: { fontSize: 9.5, color: COLORS.inkSoft, opacity: 0.6 } }, "No Photo"))),
         React.createElement("div", { style: { flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "10px 14px" } },
             React.createElement("h3", { style: {
                     fontFamily: "'Noto Sans JP', sans-serif",
@@ -4038,9 +4040,9 @@ function DetailView({ recipe, loadingFull, onAddToShoppingList }) {
                     flex: 1,
                     minWidth: 0,
                     width: "100%",
-                    height: 230,
+                    height: 260,
                     objectFit: "cover",
-                    borderRadius: 18,
+                    borderRadius: 20,
                     border: `1px solid ${COLORS.line}`,
                     boxShadow: "0 8px 24px rgba(46,42,36,0.08)",
                 } }),
@@ -4050,9 +4052,9 @@ function DetailView({ recipe, loadingFull, onAddToShoppingList }) {
                     flex: 1,
                     minWidth: 0,
                     width: "100%",
-                    height: 230,
+                    height: 260,
                     objectFit: "cover",
-                    borderRadius: 18,
+                    borderRadius: 20,
                     border: `1px solid ${COLORS.line}`,
                     boxShadow: "0 8px 24px rgba(46,42,36,0.08)",
                 } }),
@@ -4062,14 +4064,14 @@ function DetailView({ recipe, loadingFull, onAddToShoppingList }) {
                     flex: 1,
                     minWidth: 0,
                     width: "100%",
-                    height: 230,
+                    height: 260,
                     objectFit: "cover",
-                    borderRadius: 18,
+                    borderRadius: 20,
                     border: `1px solid ${COLORS.line}`,
                     boxShadow: "0 8px 24px rgba(46,42,36,0.08)",
                 } }))),
         React.createElement("div", { style: { marginBottom: 4 } },
-            React.createElement("h2", { style: { fontFamily: "'Noto Sans JP', sans-serif", fontSize: 23, fontWeight: 800, margin: 0, lineHeight: 1.35, letterSpacing: "-0.025em" } }, recipe.title)),
+            React.createElement("h2", { style: { fontFamily: "'Noto Sans JP', sans-serif", fontSize: 25, fontWeight: 800, margin: 0, lineHeight: 1.35, letterSpacing: "-0.025em" } }, recipe.title)),
         (recipe.dishCategory || recipe.meatType || recipe.noodleType || recipe.vegType || recipe.soupType || recipe.appliance || (recipe.sourceType && recipe.sourceType !== "other")) && (React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 } },
             recipe.sourceType && recipe.sourceType !== "other" && React.createElement("span", { style: {
                     fontSize: 11.5, fontWeight: 700, color: COLORS.sage, background: COLORS.sageSoft,
@@ -4153,7 +4155,7 @@ function SectionBlock({ title, children }) {
             border: `1px solid ${COLORS.line}`,
             borderRadius: 18,
             padding: "16px 15px",
-            boxShadow: "0 2px 10px rgba(65,55,45,0.03)"
+            boxShadow: "0 2px 12px rgba(46,42,36,0.035)"
         } },
         React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 12 } },
             React.createElement("span", { style: { width: 4, height: 18, borderRadius: 99, background: COLORS.accent, display: "inline-block" } }),
@@ -4247,7 +4249,7 @@ function SettingsPanel({
     const arrow = (key) => React.createElement("span",{style:{marginLeft:"auto",fontSize:20,color:COLORS.inkSoft,transform:openSection===key?"rotate(90deg)":"none",transition:"transform .18s"}},"›");
     const sectionHeader = { fontSize:12.5, fontWeight:800, color:COLORS.inkSoft, letterSpacing:"0.03em", margin:"20px 4px 8px" };
     return React.createElement("div",{style:{position:"fixed",inset:0,zIndex:110,background:COLORS.paper,overflowY:"auto",paddingBottom:"calc(30px + env(safe-area-inset-bottom,0px))"}},
-        React.createElement("div",{style:{position:"sticky",top:0,zIndex:2,display:"grid",gridTemplateColumns:"44px 1fr 44px",alignItems:"center",padding:"calc(13px + env(safe-area-inset-top,0px)) 14px 12px",background:"rgba(250,248,243,.95)",backdropFilter:"blur(16px)"}},
+        React.createElement("div",{style:{position:"sticky",top:0,zIndex:2,display:"grid",gridTemplateColumns:"44px 1fr 44px",alignItems:"center",padding:"calc(13px + env(safe-area-inset-top,0px)) 14px 12px",background:"rgba(247,246,242,.95)",backdropFilter:"blur(16px)"}},
             React.createElement("button",{onClick:onClose,style:{border:"none",background:"none",width:40,height:40,display:"grid",placeItems:"center"}},React.createElement(ChevronLeft,{size:26})),
             React.createElement("h2",{style:{fontSize:20,fontWeight:800,textAlign:"center",margin:0}},"設定"),
             React.createElement("div",null)
@@ -4363,7 +4365,7 @@ function App() {
     const [mode, setMode] = useState(() => {
         try {
             const saved = localStorage.getItem("appMode");
-            return saved && saved !== "todo" ? saved : "recipe";
+            return saved || "recipe";
         }
         catch {
             return "recipe";
@@ -4380,7 +4382,7 @@ function App() {
     };
     // ---- unified settings (name / API key / group management for both lists) ----
     const [showSettings, setShowSettings] = useState(false);
-    const [showMoreMenu, setShowMoreMenu] = useState(false);
+    const [showOtherMenu, setShowOtherMenu] = useState(false);
     const [recipeHomeToken, setRecipeHomeToken] = useState(0);
     const [recipeInitialView, setRecipeInitialView] = useState("list");
     const [myName, setMyName] = useState("");
@@ -4895,21 +4897,70 @@ function App() {
         uref(`${listKey}-ungrouped-label`).set(label);
     }
     return (React.createElement("div", { style: { display: "flex", flexDirection: "column", height: "100dvh" } },
-        React.createElement("div", { style: { position: "fixed", left: "50%", transform: "translateX(-50%)", bottom: 0, width: "100%", maxWidth: 520, zIndex: 70, display: "flex", alignItems: "center", background: "rgba(255,255,255,0.97)", borderTop: `1px solid ${COLORS.line}`, padding: "7px 10px calc(7px + env(safe-area-inset-bottom, 0px))", boxShadow: "0 -6px 24px rgba(65,55,45,0.06)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)" } },
-            React.createElement("button", { onClick: () => { switchMode("recipe"); setRecipeInitialView("list"); setRecipeHomeToken((v) => v + 1); setShowSettings(false); setShowMoreMenu(false); }, style: { flex: 1, border: "none", background: "none", padding: "7px 0 4px", display: "flex", flexDirection: "column", alignItems: "center", gap: 2, fontSize: 10.5, fontWeight: 700, color: mode === "recipe" && recipeInitialView === "list" ? COLORS.accent : COLORS.inkSoft } }, React.createElement(BookOpen, { size: 21 }), "レシピ"),
-            React.createElement("button", { onClick: () => { switchMode("recipe"); setRecipeInitialView("calendar"); setRecipeHomeToken((v) => v + 1); setShowSettings(false); setShowMoreMenu(false); }, style: { flex: 1, border: "none", background: "none", padding: "7px 0 4px", display: "flex", flexDirection: "column", alignItems: "center", gap: 2, fontSize: 10.5, fontWeight: 700, color: mode === "recipe" && recipeInitialView === "calendar" ? COLORS.accent : COLORS.inkSoft } }, React.createElement(CalendarIcon, { size: 21 }), "献立"),
-            React.createElement("button", { onClick: () => { switchMode("shopping"); setShowSettings(false); setShowMoreMenu(false); }, style: { flex: 1, border: "none", background: "none", padding: "7px 0 4px", display: "flex", flexDirection: "column", alignItems: "center", gap: 2, fontSize: 10.5, fontWeight: 700, color: mode === "shopping" ? COLORS.accent : COLORS.inkSoft } }, React.createElement(ClipboardPaste, { size: 21 }), "買い物"),
-            React.createElement("button", { onClick: () => setShowMoreMenu(true), style: { flex: 1, border: "none", background: "none", padding: "7px 0 4px", display: "flex", flexDirection: "column", alignItems: "center", gap: 2, fontSize: 10.5, fontWeight: 700, color: mode === "prints" || showSettings ? COLORS.accent : COLORS.inkSoft } }, React.createElement(Menu, { size: 21 }), "その他")),
-        showMoreMenu && React.createElement("div", { onClick: () => setShowMoreMenu(false), style: { position: "fixed", inset: 0, background: "rgba(32,35,31,.26)", zIndex: 78 } }),
-        showMoreMenu && React.createElement("div", { style: { position: "fixed", left: "50%", transform: "translateX(-50%)", bottom: 0, width: "100%", maxWidth: 520, zIndex: 79, background: "#fff", borderRadius: "24px 24px 0 0", padding: "10px 16px calc(18px + env(safe-area-inset-bottom, 0px))", boxShadow: "0 -12px 36px rgba(32,35,31,.16)" } },
-            React.createElement("div", { style: { width: 38, height: 4, borderRadius: 999, background: COLORS.line, margin: "0 auto 14px" } }),
-            React.createElement("h3", { style: { margin: "0 0 8px", fontSize: 20, fontWeight: 800 } }, "その他"),
-            React.createElement("button", { onClick: () => { switchMode("prints"); setShowMoreMenu(false); setShowSettings(false); }, style: { width: "100%", border: "none", background: "transparent", borderBottom: `1px solid ${COLORS.line}`, padding: "14px 2px", display: "flex", alignItems: "center", gap: 12, textAlign: "left" } }, React.createElement("span", { style: { width: 42, height: 42, borderRadius: 14, background: COLORS.accentSoft, color: COLORS.accent, display: "flex", alignItems: "center", justifyContent: "center" } }, React.createElement(FileText, { size: 20 })), React.createElement("span", { style: { flex: 1 } }, React.createElement("span", { style: { display: "block", fontSize: 14, fontWeight: 800 } }, "プリント"), React.createElement("span", { style: { display: "block", fontSize: 11.5, color: COLORS.inkSoft, marginTop: 2 } }, "学校などの紙を写真で管理")), React.createElement(ChevronRight, { size: 17, color: COLORS.inkSoft })),
-            React.createElement("button", { onClick: () => { setShowSettings(true); setShowMoreMenu(false); }, style: { width: "100%", border: "none", background: "transparent", padding: "14px 2px", display: "flex", alignItems: "center", gap: 12, textAlign: "left" } }, React.createElement("span", { style: { width: 42, height: 42, borderRadius: 14, background: COLORS.chipBg, color: COLORS.inkSoft, display: "flex", alignItems: "center", justifyContent: "center" } }, React.createElement(Settings, { size: 20 })), React.createElement("span", { style: { flex: 1 } }, React.createElement("span", { style: { display: "block", fontSize: 14, fontWeight: 800 } }, "設定"), React.createElement("span", { style: { display: "block", fontSize: 11.5, color: COLORS.inkSoft, marginTop: 2 } }, "カテゴリ・データ・AIなど")), React.createElement(ChevronRight, { size: 17, color: COLORS.inkSoft }))),
+        React.createElement("div", { style: {
+                position: "fixed",
+                left: "50%",
+                transform: "translateX(-50%)",
+                bottom: 0,
+                width: "100%",
+                maxWidth: 520,
+                zIndex: 70,
+                display: "flex",
+                alignItems: "center",
+                background: "rgba(255,255,255,0.96)",
+                borderTop: `1px solid ${COLORS.line}`,
+                padding: "7px 8px calc(7px + env(safe-area-inset-bottom, 0px))",
+                boxShadow: "0 -8px 26px rgba(32,35,31,0.06)",
+                backdropFilter: "blur(18px)",
+                WebkitBackdropFilter: "blur(18px)",
+            } },
+            React.createElement("button", { onClick: () => { switchMode("recipe"); setRecipeInitialView("list"); setRecipeHomeToken((v) => v + 1); setShowSettings(false); }, style: {
+                    flex: 1, border: "none", background: "none", padding: "7px 0 5px",
+                    display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+                    fontSize: 10.5, fontWeight: 700, color: mode === "recipe" && recipeInitialView === "list" ? COLORS.accent : COLORS.inkSoft,
+                } }, React.createElement(BookOpen, { size: 21 }), "レシピ"),
+            React.createElement("button", { onClick: () => { switchMode("recipe"); setRecipeInitialView("calendar"); setRecipeHomeToken((v) => v + 1); setShowSettings(false); }, style: {
+                    flex: 1, border: "none", background: "none", padding: "7px 0 5px",
+                    display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+                    fontSize: 10.5, fontWeight: 700, color: mode === "recipe" && recipeInitialView === "calendar" ? COLORS.accent : COLORS.inkSoft,
+                } }, React.createElement(CalendarIcon, { size: 21 }), "献立"),
+            React.createElement("button", { onClick: () => switchMode("shopping"), style: {
+                    flex: 1, border: "none", background: "none", padding: "7px 0 5px",
+                    display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+                    fontSize: 10.5, fontWeight: 700, color: mode === "shopping" ? COLORS.accent : COLORS.inkSoft,
+                } }, React.createElement(ClipboardPaste, { size: 21 }), "買い物"),
+            React.createElement("button", { onClick: () => setShowOtherMenu(true), style: {
+                    flex: 1, border: "none", background: "none", padding: "7px 0 5px",
+                    display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+                    fontSize: 10.5, fontWeight: 700, color: (mode === "todo" || mode === "prints") ? COLORS.accent : COLORS.inkSoft,
+                } }, React.createElement(MoreHorizontal, { size: 21 }), "その他")),
         React.createElement("div", { style: { flex: 1, minHeight: 0, overflowY: "auto", paddingBottom: "calc(70px + env(safe-area-inset-bottom, 0px))", background: COLORS.paper } },
             mode === "recipe" && React.createElement(RecipeNotebook, { key: recipeHomeToken, initialView: recipeInitialView, apiKey: apiKey, jinaApiKey: jinaApiKey, categoryOrder: categoryOrder, applianceOrder: applianceOrder }),
             mode === "shopping" && React.createElement(TodoApp, { listKey: "shopping", myName: myName, ungroupedLabel: ungroupedLabels.shopping }),
+            mode === "todo" && React.createElement(TodoApp, { listKey: "todo", myName: myName, ungroupedLabel: ungroupedLabels.todo }),
             mode === "prints" && React.createElement(LazyPrintsView, { printIndex: printIndex, printsLoaded: printsLoaded, printPeople: printPeople, saveError: printSaveError, onSave: savePrint, onDelete: deletePrint, onAddPerson: addPrintPerson, myName: myName, uref: uref })),
+        showOtherMenu && React.createElement("div", { onClick: () => setShowOtherMenu(false), style: {
+                position: "fixed", inset: 0, zIndex: 120, background: "rgba(56,54,49,0.32)",
+                display: "flex", alignItems: "flex-end",
+            } },
+            React.createElement("div", { onClick: (e) => e.stopPropagation(), style: {
+                    width: "100%", background: COLORS.paperCard, borderTopLeftRadius: RADIUS.card, borderTopRightRadius: RADIUS.card,
+                    padding: "10px 16px calc(20px + env(safe-area-inset-bottom, 0px))", boxShadow: SHADOW.lifted,
+                } },
+                React.createElement("div", { style: { width: 36, height: 4, borderRadius: 999, background: COLORS.line, margin: "6px auto 14px" } }),
+                [
+                    { key: "todo", label: "ToDo", icon: Check, action: () => { switchMode("todo"); setShowSettings(false); setShowOtherMenu(false); } },
+                    { key: "prints", label: "プリント", icon: FileText, action: () => { switchMode("prints"); setShowSettings(false); setShowOtherMenu(false); } },
+                    { key: "settings", label: "設定", icon: Settings, action: () => { setShowSettings(true); setShowOtherMenu(false); } },
+                ].map((item) => React.createElement("button", { key: item.key, onClick: item.action, style: {
+                        width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "13px 6px",
+                        border: "none", background: "none", textAlign: "left", cursor: "pointer",
+                    } },
+                    React.createElement("div", { style: {
+                            width: 40, height: 40, borderRadius: RADIUS.button, background: COLORS.soft,
+                            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                        } }, React.createElement(item.icon, { size: 19, color: COLORS.sage })),
+                    React.createElement("span", { style: { fontSize: 15, fontWeight: 650, color: COLORS.ink } }, item.label))))),
         showSettings && React.createElement(SettingsPanel, {
             onClose: () => setShowSettings(false),
             myName: myName,

@@ -10,7 +10,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="レシピノート" />
   <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="theme-color" content="#FAF8F3" />
+  <meta name="theme-color" content="#F7F6F2" />
   <link rel="apple-touch-icon" href="./icon-180.png" />
   <link rel="icon" href="./icon-192.png" />
   <link rel="manifest" href="./manifest.json" />
@@ -25,20 +25,10 @@
   <link rel="apple-touch-startup-image" href="./splash/splash-750x1334.png" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2)" />
 
   <style>
-    :root {
-      --bg-main:#FAF8F3; --bg-card:#FFFFFF; --sage:#7F947C; --sage-soft:#E7EEE5;
-      --terracotta:#C9856B; --text:#383631; --text-sub:#777269; --border:#EAE5DC;
-    }
     * { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; background: var(--bg-main); width: 100%; overflow-x: hidden; -webkit-tap-highlight-color: transparent; color:var(--text); overscroll-behavior-y:none; }
-    body { font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue","Hiragino Sans","Yu Gothic",sans-serif; }
+    html, body { margin: 0; padding: 0; background: #F7F6F2; width: 100%; overflow-x: hidden; -webkit-tap-highlight-color: transparent; }
     #root { min-height: 100vh; width: 100%; }
     img, input, textarea, select, button { max-width: 100%; min-width: 0; }
-    input, textarea, select { font-size:16px; }
-    button { touch-action:manipulation; }
-    button, input, textarea, select { font-family:inherit; }
-    input::placeholder, textarea::placeholder { color:#AAA49B; opacity:1; }
-    ::selection { background:#E7EEE5; }
   </style>
 
   <script type="importmap">
