@@ -211,18 +211,18 @@ function useGoogleFonts() {
     }, []);
 }
 const COLORS = {
-    paper: "#F7F6F2",
+    paper: "#FAF8F3",
     paperCard: "#FFFFFF",
-    ink: "#20231F",
-    inkSoft: "#7E827C",
-    mustard: "#B18A57",
-    sage: "#6F806F",
-    sageSoft: "#E8EDE7",
-    plum: "#B86A68",
-    line: "#E7E5DF",
-    accent: "#6F806F",
-    accentSoft: "#E8EDE7",
-    chipBg: "#EEEDE8",
+    ink: "#383631",
+    inkSoft: "#777269",
+    mustard: "#B69768",
+    sage: "#7F947C",
+    sageSoft: "#E7EEE5",
+    plum: "#C9856B",
+    line: "#EAE5DC",
+    accent: "#7F947C",
+    accentSoft: "#E7EEE5",
+    chipBg: "#F3EFE8",
 };
 function detectSource(url) {
     if (!url)
@@ -2697,7 +2697,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
         React.createElement("div", { style: {
                 width: "100%",
                 maxWidth: 520,
-                padding: "22px 18px 118px",
+                padding: "calc(18px + env(safe-area-inset-top, 0px)) 18px 118px",
             } },
             React.createElement(Header, { view: view, onBack: () => { setView(view === "detail" ? detailOrigin : "list"); setDetailOrigin("list"); resetAddForm(); setConfirmDelete(false); }, isFavorite: !!selected?.favorite, onToggleFavorite: () => selected && toggleFavorite(selected), editDisabled: fullRecipeLoading, onEdit: () => {
                     // Guard against opening the editor before the full
@@ -2742,7 +2742,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         input, textarea { font-family: inherit; }
         button { font-family: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
-        button:active { transform: scale(0.985); }
+        button:active { transform: scale(0.98); }
         input, textarea, select { -webkit-appearance: none; }
         * { -webkit-tap-highlight-color: transparent; }
         ::selection { background: ${COLORS.accent}55; }
@@ -2834,6 +2834,10 @@ function ListView({ recipes, total, query, setQuery, categoryFilter, setCategory
         { label: "手動で入力", icon: Edit2, mode: "manual" },
     ];
     return (React.createElement("div", { style: { paddingBottom: 24 } },
+        React.createElement("div", { style: { margin: "2px 2px 18px" } },
+            React.createElement("div", { style: { fontSize: 11, fontWeight: 800, letterSpacing: "0.14em", color: COLORS.sage, marginBottom: 5 } }, "RECIPE NOTEBOOK"),
+            React.createElement("h1", { style: { margin: 0, fontSize: 28, lineHeight: 1.25, letterSpacing: "-0.02em", fontWeight: 800, color: COLORS.ink } }, "今日、なに作る？"),
+            React.createElement("p", { style: { margin: "7px 0 0", fontSize: 12.5, lineHeight: 1.6, color: COLORS.inkSoft } }, "お気に入りのレシピを、毎日の献立と買い物へ。")),
         notice && React.createElement("div", { onClick: onDismissNotice, style: {
                 display: "flex", alignItems: "center", gap: 8, background: COLORS.accentSoft, color: COLORS.accent,
                 borderRadius: 12, padding: "10px 14px", fontSize: 13, fontWeight: 700, marginBottom: 12, cursor: "pointer"
@@ -2848,9 +2852,10 @@ function ListView({ recipes, total, query, setQuery, categoryFilter, setCategory
                     alignItems: "center",
                     gap: 8,
                     background: "#fff",
-                    borderRadius: 999,
-                    padding: "11px 16px",
-                    boxShadow: "0 1px 4px rgba(46,42,36,0.06)",
+                    borderRadius: 16,
+                    padding: "13px 15px",
+                    border: `1px solid ${COLORS.line}`,
+                    boxShadow: "0 4px 18px rgba(65,55,45,0.045)",
                 } },
                 React.createElement(Search, { size: 16, color: COLORS.inkSoft, style: { flexShrink: 0 } }),
                 React.createElement("input", { value: query, onChange: (e) => setQuery(e.target.value), placeholder: "\u30EC\u30B7\u30D4\u3092\u691C\u7D22", style: {
@@ -2872,8 +2877,9 @@ function ListView({ recipes, total, query, setQuery, categoryFilter, setCategory
                     justifyContent: "center",
                     background: "#fff",
                     border: "none",
-                    borderRadius: "50%",
-                    boxShadow: "0 1px 4px rgba(46,42,36,0.06)",
+                    borderRadius: 14,
+                    border: `1px solid ${COLORS.line}`,
+                    boxShadow: "0 4px 18px rgba(65,55,45,0.045)",
                     cursor: "pointer",
                 } }, viewMode === "grid" ? React.createElement(ListIcon, { size: 17, color: COLORS.inkSoft }) : React.createElement(GridIcon, { size: 17, color: COLORS.inkSoft })),
             React.createElement("button", { onClick: () => setFavoriteOnly((v) => !v), title: "\u30D6\u30C3\u30AF\u30DE\u30FC\u30AF\u3060\u3051\u8868\u793A", "aria-label": "\u30D6\u30C3\u30AF\u30DE\u30FC\u30AF\u3060\u3051\u8868\u793A", style: {
@@ -2885,8 +2891,9 @@ function ListView({ recipes, total, query, setQuery, categoryFilter, setCategory
                     justifyContent: "center",
                     background: favoriteOnly ? COLORS.accent : "#fff",
                     border: "none",
-                    borderRadius: "50%",
-                    boxShadow: "0 1px 4px rgba(46,42,36,0.06)",
+                    borderRadius: 14,
+                    border: `1px solid ${COLORS.line}`,
+                    boxShadow: "0 4px 18px rgba(65,55,45,0.045)",
                     cursor: "pointer",
                 } },
                 React.createElement(Bookmark, { size: 17, color: favoriteOnly ? "#fff" : COLORS.inkSoft }))),
@@ -3122,11 +3129,11 @@ function ListView({ recipes, total, query, setQuery, categoryFilter, setCategory
                         border: "none", background: "transparent", padding: 0, display: "flex", alignItems: "center", gap: 10
                     } },
                     React.createElement("span", { style: {
-                            background: "rgba(255,255,255,0.98)", color: COLORS.ink, borderRadius: 12, padding: "8px 12px",
+                            background: "rgba(255,255,255,0.98)", color: COLORS.ink, borderRadius: 14, padding: "10px 13px",
                             fontSize: 13, fontWeight: 700, boxShadow: "0 6px 22px rgba(32,35,31,0.12)", whiteSpace: "nowrap"
                         } }, item.label),
                     React.createElement("span", { style: {
-                            width: 48, height: 48, borderRadius: "50%", background: COLORS.accent, color: "#fff",
+                            width: 48, height: 48, borderRadius: 16, background: COLORS.accent, color: "#fff",
                             display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 8px 24px rgba(67,84,69,0.28)"
                         } }, React.createElement(Icon, { size: 21 }))
                 );
@@ -3135,9 +3142,10 @@ function ListView({ recipes, total, query, setQuery, categoryFilter, setCategory
                 position: "fixed",
                 right: "max(20px, calc(50% - 238px))",
                 bottom: "calc(82px + env(safe-area-inset-bottom, 0px))",
-                width: 58,
-                height: 58,
-                borderRadius: "50%",
+                minWidth: 58,
+                height: 54,
+                padding: "0 18px",
+                borderRadius: 18,
                 background: COLORS.accent,
                 color: "#fff",
                 border: "none",
@@ -3149,7 +3157,8 @@ function ListView({ recipes, total, query, setQuery, categoryFilter, setCategory
                 transform: showQuickAdd ? "rotate(45deg)" : "rotate(0deg)",
                 transition: "transform 180ms ease",
             }, "aria-label": showQuickAdd ? "追加メニューを閉じる" : "レシピを追加" },
-            React.createElement(Plus, { size: 26 }))));
+            React.createElement(Plus, { size: 24 }),
+            !showQuickAdd && React.createElement("span", { style: { marginLeft: 7, fontSize: 13, fontWeight: 800 } }, "追加"))));
 }
 // Same on-demand pattern as LazyCalendarView, for the photo crop/position
 // editors — only needed while someone is actively adjusting a photo.
@@ -4135,8 +4144,8 @@ function SectionBlock({ title, children }) {
             marginTop: 14,
             background: "#fff",
             border: `1px solid ${COLORS.line}`,
-            borderRadius: 18,
-            padding: "16px 15px",
+            borderRadius: 22,
+            padding: "18px 17px",
             boxShadow: "0 2px 12px rgba(46,42,36,0.035)"
         } },
         React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 12 } },
@@ -4231,7 +4240,7 @@ function SettingsPanel({
     const arrow = (key) => React.createElement("span",{style:{marginLeft:"auto",fontSize:20,color:COLORS.inkSoft,transform:openSection===key?"rotate(90deg)":"none",transition:"transform .18s"}},"›");
     const sectionHeader = { fontSize:12.5, fontWeight:800, color:COLORS.inkSoft, letterSpacing:"0.03em", margin:"20px 4px 8px" };
     return React.createElement("div",{style:{position:"fixed",inset:0,zIndex:110,background:COLORS.paper,overflowY:"auto",paddingBottom:"calc(30px + env(safe-area-inset-bottom,0px))"}},
-        React.createElement("div",{style:{position:"sticky",top:0,zIndex:2,display:"grid",gridTemplateColumns:"44px 1fr 44px",alignItems:"center",padding:"calc(13px + env(safe-area-inset-top,0px)) 14px 12px",background:"rgba(247,246,242,.95)",backdropFilter:"blur(16px)"}},
+        React.createElement("div",{style:{position:"sticky",top:0,zIndex:2,display:"grid",gridTemplateColumns:"44px 1fr 44px",alignItems:"center",padding:"calc(13px + env(safe-area-inset-top,0px)) 14px 12px",background:"rgba(250,248,243,.95)",backdropFilter:"blur(16px)"}},
             React.createElement("button",{onClick:onClose,style:{border:"none",background:"none",width:40,height:40,display:"grid",placeItems:"center"}},React.createElement(ChevronLeft,{size:26})),
             React.createElement("h2",{style:{fontSize:20,fontWeight:800,textAlign:"center",margin:0}},"設定"),
             React.createElement("div",null)
@@ -4891,7 +4900,7 @@ function App() {
                 background: "rgba(255,255,255,0.96)",
                 borderTop: `1px solid ${COLORS.line}`,
                 padding: "7px 8px calc(7px + env(safe-area-inset-bottom, 0px))",
-                boxShadow: "0 -8px 26px rgba(32,35,31,0.06)",
+                boxShadow: "0 -10px 32px rgba(65,55,45,0.07)",
                 backdropFilter: "blur(18px)",
                 WebkitBackdropFilter: "blur(18px)",
             } },
