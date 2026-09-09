@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { FiPlus as Plus, FiX as X, FiCamera as Camera, FiFileText as FileText, FiCheck as Check, FiChevronLeft as ChevronLeft, FiEdit2 as Edit2 } from "react-icons/fi";
+import { FiPlus as Plus, FiX as X, FiCamera as Camera, FiFileText as FileText, FiCheck as Check, FiChevronLeft as ChevronLeft, FiEdit2 as Edit2, FiSearch as Search } from "react-icons/fi";
 
 // This chunk is loaded on demand (only when the プリント tab is opened) —
 // see LazyPrintsView in app.js. Purpose: photograph paper documents (school
@@ -73,8 +73,12 @@ function PrintListCard({ print, onOpen, onDelete }) {
 
 function PrintListView({ printIndex, printsLoaded, printPeople, onOpenAdd, onOpenDetail, onDelete }) {
     const [personFilter, setPersonFilter] = useState(null);
+    const [query, setQuery] = useState("");
+    const q = query.trim().toLowerCase();
     const filtered = printIndex.filter((p) => {
         if (personFilter && !(p.personTags || []).includes(personFilter))
+            return false;
+        if (q && !(p.title || "").toLowerCase().includes(q))
             return false;
         return true;
     });
@@ -90,6 +94,12 @@ function PrintListView({ printIndex, printsLoaded, printPeople, onOpenAdd, onOpe
                     display: "flex", alignItems: "center", gap: 4, background: COLORS.accent, color: "#fff",
                     border: "none", borderRadius: 999, padding: "8px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer",
                 } }, React.createElement(Plus, { size: 15 }), "追加")),
+        React.createElement("div", { style: { position: "relative", marginBottom: 12 } },
+            React.createElement(Search, { size: 15, color: COLORS.inkSoft, style: { position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" } }),
+            React.createElement("input", { value: query, onChange: (e) => setQuery(e.target.value), placeholder: "タイトルで検索", style: {
+                    width: "100%", padding: "10px 12px 10px 34px", borderRadius: 10, border: `1px solid ${COLORS.line}`,
+                    fontSize: 14, boxSizing: "border-box", background: "#fff",
+                } })),
         printPeople.length > 0 && React.createElement("div", { style: { display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4, marginBottom: 16, WebkitOverflowScrolling: "touch" } },
             React.createElement("button", { onClick: () => setPersonFilter(null), style: {
                     flexShrink: 0, fontSize: 12, fontWeight: 700, padding: "6px 13px", borderRadius: 999,
@@ -104,7 +114,7 @@ function PrintListView({ printIndex, printsLoaded, printPeople, onOpenAdd, onOpe
                     color: personFilter === p ? COLORS.accent : COLORS.inkSoft, whiteSpace: "nowrap",
                 } }, p))),
         !printsLoaded ? React.createElement("p", { style: { textAlign: "center", color: COLORS.inkSoft, fontSize: 13, padding: "40px 0" } }, "読み込み中…")
-            : filtered.length === 0 ? React.createElement("p", { style: { textAlign: "center", color: COLORS.inkSoft, fontSize: 13.5, padding: "40px 20px", lineHeight: 1.7 } }, "まだプリントがありません。右上の「追加」から、学校のプリントなどを撮って登録できます。")
+            : filtered.length === 0 ? React.createElement("p", { style: { textAlign: "center", color: COLORS.inkSoft, fontSize: 13.5, padding: "40px 20px", lineHeight: 1.7 } }, q || personFilter ? "見つかりませんでした。" : "まだプリントがありません。右上の「追加」から、学校のプリントなどを撮って登録できます。")
                 : filtered.map((p) => React.createElement(PrintListCard, { key: p.id, print: p, onOpen: onOpenDetail, onDelete: handleDelete })));
 }
 
@@ -262,6 +272,7 @@ function PrintDetailView({ print, onBack, onEdit, onDelete }) {
         React.createElement("h1", { style: { fontSize: 20, fontWeight: 800, margin: "0 0 8px", color: COLORS.ink } }, print.title),
         React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 18 } },
             print.date && React.createElement("span", { style: { fontSize: 13, color: COLORS.inkSoft } }, print.date),
+            print.createdBy && React.createElement("span", { style: { fontSize: 13, color: COLORS.inkSoft } }, `登録: ${print.createdBy}`),
             (print.personTags || []).map((p) => React.createElement("span", { key: p, style: {
                     fontSize: 12, fontWeight: 700, color: COLORS.mustard, background: "#F5EDE1", borderRadius: 999, padding: "3px 10px",
                 } }, p))),

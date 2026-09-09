@@ -4237,29 +4237,7 @@ function SettingsPanel({
             React.createElement("div",null)
         ),
         React.createElement("div",{style:{maxWidth:520,margin:"0 auto",padding:"14px 14px 28px"}},
-            React.createElement("p",{style:{...sectionHeader,marginTop:0}},"全般"),
-            React.createElement("div",{style:card},
-                React.createElement("button",{onClick:()=>toggle("profile"),style:row},
-                    React.createElement("div",{style:icon},"☺"),
-                    React.createElement("div",null,React.createElement("p",{style:title},"プロフィール"),React.createElement("p",{style:sub},myName?`${myName} で利用中`:"名前を設定")),
-                    arrow("profile")),
-                openSection==="profile" && React.createElement("div",{style:editor},
-                    React.createElement("div",{style:{display:"flex",gap:8}},
-                        React.createElement("input",{value:nameDraft,onChange:e=>setNameDraft(e.target.value),onKeyDown:e=>e.key==="Enter"&&saveName(),placeholder:"あなたの名前",style:{...input,flex:1}}),
-                        React.createElement("button",{onClick:saveName,style:action},"保存")))
-            ),
-            React.createElement("div",{style:card},
-                React.createElement("button",{onClick:exportBackup,style:row},
-                    React.createElement("div",{style:icon},"⇧"),
-                    React.createElement("div",null,React.createElement("p",{style:title},"データをバックアップ"),React.createElement("p",{style:sub},"レシピ・買い物リスト・プリントをまとめてファイルに保存")),
-                    React.createElement("span",{style:{marginLeft:"auto",fontSize:20,color:COLORS.inkSoft}},"›")),
-                React.createElement("div",{style:divider}),
-                React.createElement("button",{onClick:importBackup,style:row},
-                    React.createElement("div",{style:icon},"⇩"),
-                    React.createElement("div",null,React.createElement("p",{style:title},"データを復元"),React.createElement("p",{style:sub},"バックアップファイルから戻す")),
-                    React.createElement("span",{style:{marginLeft:"auto",fontSize:20,color:COLORS.inkSoft}},"›"))
-            ),
-            React.createElement("p",{style:sectionHeader},"レシピ"),
+            React.createElement("p",{style:{...sectionHeader,marginTop:0}},"レシピ"),
             React.createElement("div",{style:card},
                 React.createElement("button",{onClick:()=>toggle("import"),style:row},
                     React.createElement("div",{style:icon},"↗"),
@@ -4337,6 +4315,28 @@ function SettingsPanel({
                     React.createElement("div",{style:{display:"flex",gap:8,marginTop:12}},
                         React.createElement("input",{value:newPrintPersonDraft,onChange:e=>setNewPrintPersonDraft(e.target.value),onKeyDown:e=>{if(e.key==="Enter"){addPrintPerson(newPrintPersonDraft);setNewPrintPersonDraft("");}},placeholder:"例: 長男、長女",style:{...input,flex:1}}),
                         React.createElement("button",{onClick:()=>{addPrintPerson(newPrintPersonDraft);setNewPrintPersonDraft("");},style:action},"追加")))
+            ),
+            React.createElement("p",{style:sectionHeader},"全般"),
+            React.createElement("div",{style:card},
+                React.createElement("button",{onClick:()=>toggle("profile"),style:row},
+                    React.createElement("div",{style:icon},"☺"),
+                    React.createElement("div",null,React.createElement("p",{style:title},"プロフィール"),React.createElement("p",{style:sub},myName?`${myName} で利用中`:"名前を設定")),
+                    arrow("profile")),
+                openSection==="profile" && React.createElement("div",{style:editor},
+                    React.createElement("div",{style:{display:"flex",gap:8}},
+                        React.createElement("input",{value:nameDraft,onChange:e=>setNameDraft(e.target.value),onKeyDown:e=>e.key==="Enter"&&saveName(),placeholder:"あなたの名前",style:{...input,flex:1}}),
+                        React.createElement("button",{onClick:saveName,style:action},"保存")))
+            ),
+            React.createElement("div",{style:card},
+                React.createElement("button",{onClick:exportBackup,style:row},
+                    React.createElement("div",{style:icon},"⇧"),
+                    React.createElement("div",null,React.createElement("p",{style:title},"データをバックアップ"),React.createElement("p",{style:sub},"レシピ・買い物リスト・プリントをまとめてファイルに保存")),
+                    React.createElement("span",{style:{marginLeft:"auto",fontSize:20,color:COLORS.inkSoft}},"›")),
+                React.createElement("div",{style:divider}),
+                React.createElement("button",{onClick:importBackup,style:row},
+                    React.createElement("div",{style:icon},"⇩"),
+                    React.createElement("div",null,React.createElement("p",{style:title},"データを復元"),React.createElement("p",{style:sub},"バックアップファイルから戻す")),
+                    React.createElement("span",{style:{marginLeft:"auto",fontSize:20,color:COLORS.inkSoft}},"›"))
             )
         )
     );
@@ -4418,6 +4418,7 @@ function App() {
             title: print.title || "",
             date: print.date || "",
             createdAt: print.createdAt || "",
+            createdBy: print.createdBy || "",
             personTags: print.personTags || [],
             photoCount: (print.photos || []).length,
             thumbnailUrl: (print.photos || [])[0] || "",
@@ -4431,7 +4432,7 @@ function App() {
         const thumbnailUrl = printData.photos?.[0]
             ? await recompressDataUrl(printData.photos[0], 200, 0.5).catch(() => printData.photos[0])
             : "";
-        const full = { ...printData, id, createdAt: printData.createdAt || new Date().toISOString() };
+        const full = { ...printData, id, createdAt: printData.createdAt || new Date().toISOString(), createdBy: printData.createdBy || myName || "" };
         const indexEntry = { ...buildPrintIndexEntry(full), thumbnailUrl };
         try {
             await Promise.all([
@@ -4922,7 +4923,7 @@ function App() {
         React.createElement("div", { style: { flex: 1, minHeight: 0, overflowY: "auto", paddingBottom: "calc(70px + env(safe-area-inset-bottom, 0px))", background: COLORS.paper } },
             mode === "recipe" && React.createElement(RecipeNotebook, { key: recipeHomeToken, initialView: recipeInitialView, apiKey: apiKey, jinaApiKey: jinaApiKey, categoryOrder: categoryOrder, applianceOrder: applianceOrder }),
             mode === "shopping" && React.createElement(TodoApp, { listKey: "shopping", myName: myName, ungroupedLabel: ungroupedLabels.shopping }),
-            mode === "prints" && React.createElement(LazyPrintsView, { printIndex: printIndex, printsLoaded: printsLoaded, printPeople: printPeople, saveError: printSaveError, onSave: savePrint, onDelete: deletePrint, onAddPerson: addPrintPerson, uref: uref })),
+            mode === "prints" && React.createElement(LazyPrintsView, { printIndex: printIndex, printsLoaded: printsLoaded, printPeople: printPeople, saveError: printSaveError, onSave: savePrint, onDelete: deletePrint, onAddPerson: addPrintPerson, myName: myName, uref: uref })),
         showSettings && React.createElement(SettingsPanel, {
             onClose: () => setShowSettings(false),
             myName: myName,
