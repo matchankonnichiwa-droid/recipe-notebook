@@ -4251,13 +4251,21 @@ function SettingsPanel({
             React.createElement("div",{style:card},
                 React.createElement("button",{onClick:exportBackup,style:row},
                     React.createElement("div",{style:icon},"⇧"),
-                    React.createElement("div",null,React.createElement("p",{style:title},"データをバックアップ"),React.createElement("p",{style:sub},"レシピと買い物リストをファイルに保存")),
+                    React.createElement("div",null,React.createElement("p",{style:title},"データをバックアップ"),React.createElement("p",{style:sub},"レシピ・買い物リスト・プリントをまとめてファイルに保存")),
                     React.createElement("span",{style:{marginLeft:"auto",fontSize:20,color:COLORS.inkSoft}},"›")),
                 React.createElement("div",{style:divider}),
                 React.createElement("button",{onClick:importBackup,style:row},
                     React.createElement("div",{style:icon},"⇩"),
                     React.createElement("div",null,React.createElement("p",{style:title},"データを復元"),React.createElement("p",{style:sub},"バックアップファイルから戻す")),
                     React.createElement("span",{style:{marginLeft:"auto",fontSize:20,color:COLORS.inkSoft}},"›"))
+            ),
+            React.createElement("p",{style:sectionHeader},"レシピ"),
+            React.createElement("div",{style:card},
+                React.createElement("button",{onClick:()=>toggle("import"),style:row},
+                    React.createElement("div",{style:icon},"↗"),
+                    React.createElement("div",null,React.createElement("p",{style:title},"レシピ取り込み"),React.createElement("p",{style:sub},apiKey?"AI読み取り設定済み":"AI読み取りの設定")),
+                    arrow("import")),
+                openSection==="import" && React.createElement("div",{style:editor},React.createElement(ApiKeySettings,{apiKey,saveApiKey}),React.createElement("div",{style:{height:8}}),React.createElement(JinaKeySettings,{jinaApiKey,saveJinaApiKey}))
             ),
             React.createElement("div",{style:card},
                 React.createElement("button",{onClick:migrateEmbeddedPhotos,disabled:photoMigrationStatus && typeof photoMigrationStatus==="object",style:row},
@@ -4271,20 +4279,6 @@ function SettingsPanel({
                                     ? "完了しました。起動が軽くなっているはずです。"
                                     : "古いレシピの写真データを整理して、起動を速くします")),
                     React.createElement("span",{style:{marginLeft:"auto",fontSize:20,color:COLORS.inkSoft}},"›"))
-            ),
-            React.createElement("div",{style:card},
-                React.createElement("div",{style:{...row,cursor:"default"}},
-                    React.createElement("div",{style:icon},"i"),
-                    React.createElement("div",null,React.createElement("p",{style:title},"レシピノート"),React.createElement("p",{style:sub},"シンプルに、ためて、作って、買い物へ。")),
-                    React.createElement("span",{style:{marginLeft:"auto",fontSize:11,color:COLORS.inkSoft}},"v1"))
-            ),
-            React.createElement("p",{style:sectionHeader},"レシピ"),
-            React.createElement("div",{style:card},
-                React.createElement("button",{onClick:()=>toggle("import"),style:row},
-                    React.createElement("div",{style:icon},"↗"),
-                    React.createElement("div",null,React.createElement("p",{style:title},"レシピ取り込み"),React.createElement("p",{style:sub},apiKey?"AI読み取り設定済み":"AI読み取りの設定")),
-                    arrow("import")),
-                openSection==="import" && React.createElement("div",{style:editor},React.createElement(ApiKeySettings,{apiKey,saveApiKey}),React.createElement("div",{style:{height:8}}),React.createElement(JinaKeySettings,{jinaApiKey,saveJinaApiKey}))
             ),
             React.createElement("div",{style:card},
                 React.createElement("button",{onClick:()=>toggle("categories"),style:row},
