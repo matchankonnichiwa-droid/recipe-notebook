@@ -1513,10 +1513,11 @@ function ShoppingEmptyState() {
     );
 }
 
-function TodoApp({ listKey, myName, ungroupedLabel }) {
+function TodoApp({ initialListKey, myName, ungroupedLabels }) {
     const [items, setItems] = useState({ todo: [], shopping: [] });
     const [readyLists, setReadyLists] = useState({ todo: false, shopping: false });
     const [groups, setGroups] = useState({ todo: [], shopping: [] });
+    const [activeList, setActiveList] = useState(initialListKey || "shopping");
     const [input, setInput] = useState("");
     const [dueDateDraft, setDueDateDraft] = useState("");
     const [newMemoDraft, setNewMemoDraft] = useState("");
@@ -1529,7 +1530,7 @@ function TodoApp({ listKey, myName, ungroupedLabel }) {
     const [composerOpen, setComposerOpen] = useState(false);
     const [openDetailId, setOpenDetailId] = useState(null);
     const inputRef = useRef(null);
-    const activeList = listKey;
+    const ungroupedLabel = ungroupedLabels?.[activeList];
     // realtime listeners for todos/shopping/groups
     useEffect(() => {
         // Show cached items instantly while the Firebase listener connects
@@ -1746,7 +1747,13 @@ function TodoApp({ listKey, myName, ungroupedLabel }) {
     return React.createElement("div", { style: { fontFamily: TODO_FONT_BODY, background: TODO_PALETTE.paper, minHeight: "100%", maxWidth: 480, margin: "0 auto", display: "flex", flexDirection: "column", color: TODO_PALETTE.ink, fontSize: 13 } }, 
     // header
     React.createElement("div", { style: { padding: "18px 16px 10px" } },
-        React.createElement("div", { style: { fontSize: 10, fontWeight: 800, letterSpacing: "0.12em", color: TODO_PALETTE.sage, marginBottom: 3 } }, "SHOPPING LIST"),
+        React.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 10 } },
+            Object.keys(LISTS).map((key) => React.createElement("button", { key: key, onClick: () => setActiveList(key), style: {
+                    padding: "6px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 800, cursor: "pointer",
+                    border: `1px solid ${activeList === key ? TODO_PALETTE.sage : TODO_PALETTE.line}`,
+                    background: activeList === key ? TODO_PALETTE.sage : "transparent",
+                    color: activeList === key ? "#fff" : TODO_PALETTE.inkSoft,
+                } }, LISTS[key].label))),
         React.createElement("div", null,
             React.createElement("div", { style: { fontFamily: TODO_FONT_DISPLAY, fontSize: 24, fontWeight: 800, letterSpacing: "0.01em" } }, LISTS[activeList].label),
             React.createElement("div", { style: { fontSize: 11, color: TODO_PALETTE.inkSoft, marginTop: 3 } }, dateStr)
@@ -4926,13 +4933,8 @@ function App() {
             React.createElement("button", { onClick: () => switchMode("shopping"), style: {
                     flex: 1, border: "none", background: "none", padding: "7px 0 5px",
                     display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
-                    fontSize: 10.5, fontWeight: 700, color: mode === "shopping" ? COLORS.accent : COLORS.inkSoft,
+                    fontSize: 10.5, fontWeight: 700, color: (mode === "shopping" || mode === "todo") ? COLORS.accent : COLORS.inkSoft,
                 } }, React.createElement(ClipboardPaste, { size: 21 }), "買い物"),
-            React.createElement("button", { onClick: () => switchMode("todo"), style: {
-                    flex: 1, border: "none", background: "none", padding: "7px 0 5px",
-                    display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
-                    fontSize: 10.5, fontWeight: 700, color: mode === "todo" ? COLORS.accent : COLORS.inkSoft,
-                } }, React.createElement(Check, { size: 21 }), "ToDo"),
             React.createElement("button", { onClick: () => switchMode("prints"), style: {
                     flex: 1, border: "none", background: "none", padding: "7px 0 5px",
                     display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
@@ -4945,8 +4947,10 @@ function App() {
                 } }, React.createElement(Settings, { size: 21 }), "設定")),
         React.createElement("div", { style: { flex: 1, minHeight: 0, overflowY: "auto", paddingBottom: "calc(70px + env(safe-area-inset-bottom, 0px))", background: COLORS.paper } },
             mode === "recipe" && React.createElement(RecipeNotebook, { key: recipeHomeToken, initialView: recipeInitialView, apiKey: apiKey, jinaApiKey: jinaApiKey, categoryOrder: categoryOrder, applianceOrder: applianceOrder }),
-            mode === "shopping" && React.createElement(TodoApp, { listKey: "shopping", myName: myName, ungroupedLabel: ungroupedLabels.shopping }),
-            mode === "todo" && React.createElement(TodoApp, { listKey: "todo", myName: myName, ungroupedLabel: ungroupedLabels.todo }),
+            // 買い物・ToDo は同じ画面の中の切り替えタブになった(以前は別々のタブ)。
+            // どちらのモードで来ても同じ TodoApp を出し、内部の切り替えタブが
+            // 初期表示だけ mode に合わせる。
+            (mode === "shopping" || mode === "todo") && React.createElement(TodoApp, { key: mode, initialListKey: mode, myName: myName, ungroupedLabels: ungroupedLabels }),
             mode === "prints" && React.createElement(LazyPrintsView, { printIndex: printIndex, printsLoaded: printsLoaded, printPeople: printPeople, saveError: printSaveError, onSave: savePrint, onDelete: deletePrint, onAddPerson: addPrintPerson, myName: myName, uref: uref })),
         showSettings && React.createElement(SettingsPanel, {
             onClose: () => setShowSettings(false),
