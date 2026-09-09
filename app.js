@@ -4382,7 +4382,6 @@ function App() {
     };
     // ---- unified settings (name / API key / group management for both lists) ----
     const [showSettings, setShowSettings] = useState(false);
-    const [showOtherMenu, setShowOtherMenu] = useState(false);
     const [recipeHomeToken, setRecipeHomeToken] = useState(0);
     const [recipeInitialView, setRecipeInitialView] = useState("list");
     const [myName, setMyName] = useState("");
@@ -4929,38 +4928,26 @@ function App() {
                     display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
                     fontSize: 10.5, fontWeight: 700, color: mode === "shopping" ? COLORS.accent : COLORS.inkSoft,
                 } }, React.createElement(ClipboardPaste, { size: 21 }), "買い物"),
-            React.createElement("button", { onClick: () => setShowOtherMenu(true), style: {
+            React.createElement("button", { onClick: () => switchMode("todo"), style: {
                     flex: 1, border: "none", background: "none", padding: "7px 0 5px",
                     display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
-                    fontSize: 10.5, fontWeight: 700, color: (mode === "todo" || mode === "prints") ? COLORS.accent : COLORS.inkSoft,
-                } }, React.createElement(MoreHorizontal, { size: 21 }), "その他")),
+                    fontSize: 10.5, fontWeight: 700, color: mode === "todo" ? COLORS.accent : COLORS.inkSoft,
+                } }, React.createElement(Check, { size: 21 }), "ToDo"),
+            React.createElement("button", { onClick: () => switchMode("prints"), style: {
+                    flex: 1, border: "none", background: "none", padding: "7px 0 5px",
+                    display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+                    fontSize: 10.5, fontWeight: 700, color: mode === "prints" ? COLORS.accent : COLORS.inkSoft,
+                } }, React.createElement(FileText, { size: 21 }), "プリント"),
+            React.createElement("button", { onClick: () => setShowSettings(true), title: "設定", "aria-label": "設定", style: {
+                    flex: 1, border: "none", background: "none", padding: "7px 0 5px",
+                    display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+                    fontSize: 10.5, fontWeight: 700, color: COLORS.inkSoft,
+                } }, React.createElement(Settings, { size: 21 }), "設定")),
         React.createElement("div", { style: { flex: 1, minHeight: 0, overflowY: "auto", paddingBottom: "calc(70px + env(safe-area-inset-bottom, 0px))", background: COLORS.paper } },
             mode === "recipe" && React.createElement(RecipeNotebook, { key: recipeHomeToken, initialView: recipeInitialView, apiKey: apiKey, jinaApiKey: jinaApiKey, categoryOrder: categoryOrder, applianceOrder: applianceOrder }),
             mode === "shopping" && React.createElement(TodoApp, { listKey: "shopping", myName: myName, ungroupedLabel: ungroupedLabels.shopping }),
             mode === "todo" && React.createElement(TodoApp, { listKey: "todo", myName: myName, ungroupedLabel: ungroupedLabels.todo }),
             mode === "prints" && React.createElement(LazyPrintsView, { printIndex: printIndex, printsLoaded: printsLoaded, printPeople: printPeople, saveError: printSaveError, onSave: savePrint, onDelete: deletePrint, onAddPerson: addPrintPerson, myName: myName, uref: uref })),
-        showOtherMenu && React.createElement("div", { onClick: () => setShowOtherMenu(false), style: {
-                position: "fixed", inset: 0, zIndex: 120, background: "rgba(56,54,49,0.32)",
-                display: "flex", alignItems: "flex-end",
-            } },
-            React.createElement("div", { onClick: (e) => e.stopPropagation(), style: {
-                    width: "100%", background: COLORS.paperCard, borderTopLeftRadius: RADIUS.card, borderTopRightRadius: RADIUS.card,
-                    padding: "10px 16px calc(20px + env(safe-area-inset-bottom, 0px))", boxShadow: SHADOW.lifted,
-                } },
-                React.createElement("div", { style: { width: 36, height: 4, borderRadius: 999, background: COLORS.line, margin: "6px auto 14px" } }),
-                [
-                    { key: "todo", label: "ToDo", icon: Check, action: () => { switchMode("todo"); setShowSettings(false); setShowOtherMenu(false); } },
-                    { key: "prints", label: "プリント", icon: FileText, action: () => { switchMode("prints"); setShowSettings(false); setShowOtherMenu(false); } },
-                    { key: "settings", label: "設定", icon: Settings, action: () => { setShowSettings(true); setShowOtherMenu(false); } },
-                ].map((item) => React.createElement("button", { key: item.key, onClick: item.action, style: {
-                        width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "13px 6px",
-                        border: "none", background: "none", textAlign: "left", cursor: "pointer",
-                    } },
-                    React.createElement("div", { style: {
-                            width: 40, height: 40, borderRadius: RADIUS.button, background: COLORS.soft,
-                            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                        } }, React.createElement(item.icon, { size: 19, color: COLORS.sage })),
-                    React.createElement("span", { style: { fontSize: 15, fontWeight: 650, color: COLORS.ink } }, item.label))))),
         showSettings && React.createElement(SettingsPanel, {
             onClose: () => setShowSettings(false),
             myName: myName,
