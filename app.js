@@ -2852,11 +2852,11 @@ function ListView({ recipes, total, query, setQuery, categoryFilter, setCategory
     const [showQuickAdd, setShowQuickAdd] = useState(false);
     const [showApplianceFilter, setShowApplianceFilter] = useState(false);
     const quickAddItems = [
-        { label: "URLから追加", icon: Link2, mode: "url" },
-        { label: "画像から追加", icon: GridIcon, mode: "image" },
-        { label: "撮影して追加", icon: Camera, mode: "camera" },
-        { label: "テキストから", icon: ClipboardPaste, mode: "text" },
-        { label: "手動で入力", icon: Edit2, mode: "manual" },
+        { label: "URLから追加", icon: Link2, mode: "url", hint: "レシピページを読み取ります" },
+        { label: "写真から追加", icon: GridIcon, mode: "image", hint: "スクショや保存した画像から" },
+        { label: "撮影して追加", icon: Camera, mode: "camera", hint: "レシピ本などを撮影" },
+        { label: "テキストから", icon: ClipboardPaste, mode: "text", hint: "SNSの投稿文やメモから" },
+        { label: "手動で入力", icon: Edit2, mode: "manual", hint: "自分でレシピを登録" },
     ];
     return (React.createElement("div", { style: { paddingBottom: 24 } },
         notice && React.createElement("div", { onClick: onDismissNotice, style: {
@@ -3130,32 +3130,29 @@ function ListView({ recipes, total, query, setQuery, categoryFilter, setCategory
                 ? `「${query}」に一致するレシピが見つかりませんでした。`
                 : `「${categoryFilter}」のレシピはまだありません。`)) : viewMode === "grid" ? (React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 } }, recipes.map((r) => (React.createElement(RecipeGridCard, { key: r.id, recipe: r, onClick: () => onSelect(r.id) }))))) : (React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10 } }, recipes.map((r) => (React.createElement(RecipeListCard, { key: r.id, recipe: r, onClick: () => onSelect(r.id) }))))),
         showQuickAdd && React.createElement("div", { onClick: () => setShowQuickAdd(false), style: {
-                position: "fixed", inset: 0, background: "rgba(32,35,31,0.20)", zIndex: 80
-            } }),
-        showQuickAdd && React.createElement("div", { style: {
-                position: "fixed",
-                right: "max(20px, calc(50% - 238px))",
-                bottom: "calc(154px + env(safe-area-inset-bottom, 0px))",
-                zIndex: 90,
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "flex-end",
-                gap: 10,
-            } }, quickAddItems.map((item) => {
-                const Icon = item.icon;
-                return React.createElement("button", { key: item.label, onClick: () => { setShowQuickAdd(false); onAdd(item.mode); }, style: {
-                        border: "none", background: "transparent", padding: 0, display: "flex", alignItems: "center", gap: 10
-                    } },
-                    React.createElement("span", { style: {
-                            background: "rgba(255,255,255,0.98)", color: COLORS.ink, borderRadius: 12, padding: "8px 12px",
-                            fontSize: 13, fontWeight: 700, boxShadow: "0 6px 22px rgba(32,35,31,0.12)", whiteSpace: "nowrap"
-                        } }, item.label),
-                    React.createElement("span", { style: {
-                            width: 48, height: 48, borderRadius: "50%", background: COLORS.accent, color: "#fff",
-                            display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 8px 24px rgba(67,84,69,0.28)"
-                        } }, React.createElement(Icon, { size: 21 }))
-                );
-            })),
+                position: "fixed", inset: 0, background: "rgba(56,54,49,0.32)", zIndex: 80,
+                display: "flex", alignItems: "flex-end",
+            } },
+            React.createElement("div", { onClick: (e) => e.stopPropagation(), style: {
+                    width: "100%", background: COLORS.paperCard, borderTopLeftRadius: RADIUS.card, borderTopRightRadius: RADIUS.card,
+                    padding: "10px 16px calc(20px + env(safe-area-inset-bottom, 0px))", boxShadow: SHADOW.lifted,
+                } },
+                React.createElement("div", { style: { width: 36, height: 4, borderRadius: 999, background: COLORS.line, margin: "6px auto 14px" } }),
+                React.createElement("h2", { style: { fontSize: 17, fontWeight: 800, margin: "0 0 10px", color: COLORS.ink } }, "レシピを追加"),
+                quickAddItems.map((item) => {
+                    const Icon = item.icon;
+                    return React.createElement("button", { key: item.label, onClick: () => { setShowQuickAdd(false); onAdd(item.mode); }, style: {
+                            width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "12px 6px",
+                            border: "none", background: "none", textAlign: "left", cursor: "pointer",
+                        } },
+                        React.createElement("div", { style: {
+                                width: 42, height: 42, borderRadius: RADIUS.button, background: COLORS.sageSoft,
+                                display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                            } }, React.createElement(Icon, { size: 19, color: COLORS.sage })),
+                        React.createElement("div", null,
+                            React.createElement("p", { style: { fontSize: 15, fontWeight: 700, color: COLORS.ink, margin: 0 } }, item.label),
+                            item.hint && React.createElement("p", { style: { fontSize: 12, color: COLORS.inkSoft, margin: "2px 0 0" } }, item.hint)));
+                }))),
         React.createElement("button", { onClick: () => setShowQuickAdd((v) => !v), style: {
                 position: "fixed",
                 right: "max(20px, calc(50% - 238px))",
@@ -3163,13 +3160,13 @@ function ListView({ recipes, total, query, setQuery, categoryFilter, setCategory
                 width: 58,
                 height: 58,
                 borderRadius: "50%",
-                background: COLORS.accent,
+                background: COLORS.sage,
                 color: "#fff",
                 border: "none",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                boxShadow: "0 10px 28px rgba(67,84,69,0.28)",
+                boxShadow: SHADOW.lifted,
                 zIndex: 100,
                 transform: showQuickAdd ? "rotate(45deg)" : "rotate(0deg)",
                 transition: "transform 180ms ease",
@@ -3237,24 +3234,29 @@ function LazyPrintsView(props) {
 function EmptyState({ onAdd }) {
     return (React.createElement("div", { style: {
             textAlign: "center",
-            padding: "48px 20px",
+            padding: "56px 24px",
             color: COLORS.inkSoft,
         } },
-        React.createElement(Instagram, { size: 32, color: COLORS.line, style: { marginBottom: 10 } }),
-        React.createElement("p", { style: { fontSize: 14, lineHeight: 1.7, margin: "0 0 16px" } },
-            "\u307E\u3060\u30EC\u30B7\u30D4\u304C\u3042\u308A\u307E\u305B\u3093\u3002",
+        React.createElement("div", { style: {
+                width: 64, height: 64, borderRadius: "50%", background: COLORS.soft,
+                display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px",
+            } }, React.createElement(BookOpen, { size: 26, color: COLORS.sage })),
+        React.createElement("h3", { style: { fontSize: 17, fontWeight: 800, color: COLORS.ink, margin: "0 0 8px" } }, "お気に入りのレシピを集めよう"),
+        React.createElement("p", { style: { fontSize: 13.5, lineHeight: 1.8, margin: "0 0 20px" } },
+            "Web\u3084SNS\u3067\u898B\u3064\u3051\u305F\u30EC\u30B7\u30D4\u3082\u3001",
             React.createElement("br", null),
-            "Instagram \u3084 X \u306E\u6295\u7A3F\u306E\u30AD\u30E3\u30D7\u30B7\u30E7\u30F3\u6587\u3092\u30B3\u30D4\u30FC\u3057\u3066\u3001",
+            "\u5199\u771F\u304B\u3089\u8AAD\u307F\u53D6\u3063\u305F\u30EC\u30B7\u30D4\u3082\u3001",
             React.createElement("br", null),
-            "\u8CBC\u308A\u4ED8\u3051\u308B\u3068\u30EC\u30B7\u30D4\u5F62\u5F0F\u306B\u6574\u7406\u3055\u308C\u307E\u3059\u3002"),
+            "\u3053\u3053\u306B\u307E\u3068\u3081\u3066\u4FDD\u5B58\u3067\u304D\u307E\u3059\u3002"),
         React.createElement("button", { onClick: onAdd, style: {
-                background: COLORS.accent,
+                background: COLORS.sage,
                 color: "#fff",
                 border: "none",
-                borderRadius: 12,
-                padding: "10px 20px",
+                borderRadius: RADIUS.button,
+                padding: "12px 24px",
                 fontWeight: 700,
                 fontSize: 14,
+                cursor: "pointer",
             } }, "\u6700\u521D\u306E\u30EC\u30B7\u30D4\u3092\u8FFD\u52A0")));
 }
 function RecipeGridCard({ recipe, onClick }) {
@@ -4049,9 +4051,9 @@ function DetailView({ recipe, loadingFull, onAddToShoppingList }) {
                     width: "100%",
                     height: 260,
                     objectFit: "cover",
-                    borderRadius: 20,
+                    borderRadius: RADIUS.image,
                     border: `1px solid ${COLORS.line}`,
-                    boxShadow: "0 8px 24px rgba(46,42,36,0.08)",
+                    boxShadow: SHADOW.soft,
                 } }),
             recipe.imageUrl2 && React.createElement("img", { src: recipe.imageUrl2, alt: "", onError: (e) => {
                     e.target.style.display = "none";
@@ -4061,9 +4063,9 @@ function DetailView({ recipe, loadingFull, onAddToShoppingList }) {
                     width: "100%",
                     height: 260,
                     objectFit: "cover",
-                    borderRadius: 20,
+                    borderRadius: RADIUS.image,
                     border: `1px solid ${COLORS.line}`,
-                    boxShadow: "0 8px 24px rgba(46,42,36,0.08)",
+                    boxShadow: SHADOW.soft,
                 } }),
             recipe.imageUrl3 && React.createElement("img", { src: recipe.imageUrl3, alt: "", onError: (e) => {
                     e.target.style.display = "none";
@@ -4073,9 +4075,9 @@ function DetailView({ recipe, loadingFull, onAddToShoppingList }) {
                     width: "100%",
                     height: 260,
                     objectFit: "cover",
-                    borderRadius: 20,
+                    borderRadius: RADIUS.image,
                     border: `1px solid ${COLORS.line}`,
-                    boxShadow: "0 8px 24px rgba(46,42,36,0.08)",
+                    boxShadow: SHADOW.soft,
                 } }))),
         React.createElement("div", { style: { marginBottom: 4 } },
             React.createElement("h2", { style: { fontFamily: "'Noto Sans JP', sans-serif", fontSize: 25, fontWeight: 800, margin: 0, lineHeight: 1.35, letterSpacing: "-0.025em" } }, recipe.title)),
@@ -4115,13 +4117,13 @@ function DetailView({ recipe, loadingFull, onAddToShoppingList }) {
                 justifyContent: "center",
                 gap: 8,
                 width: "100%",
-                background: addedToList ? COLORS.sageSoft : "#fff",
-                color: addedToList ? COLORS.sage : COLORS.accent,
-                border: `1px solid ${addedToList ? COLORS.sage : COLORS.accent}`,
-                borderRadius: 14,
-                padding: "12px 0",
+                background: addedToList ? COLORS.sageDark : COLORS.sage,
+                color: "#fff",
+                border: "none",
+                borderRadius: RADIUS.button,
+                padding: "14px 0",
                 fontWeight: 700,
-                fontSize: 14,
+                fontSize: 15,
                 margin: "10px 0 4px",
             } },
             addedToList ? React.createElement(Check, { size: 16 }) : React.createElement("span", { style: { fontSize: 16 } }, "\uD83D\uDED2"),
