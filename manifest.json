@@ -1,6 +1,6 @@
 {
-  "name": "レシピノート",
-  "short_name": "レシピノート",
+  "name": "暮らしノート",
+  "short_name": "暮らしノート",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#F6F6F4",
