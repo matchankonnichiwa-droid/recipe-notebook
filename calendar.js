@@ -461,12 +461,6 @@ export function CalendarView({ recipes, mealPlan, onAddEntry, onRemoveEntry, onS
                 boxShadow: mode === "edit" ? "0 1px 3px rgba(46,42,36,0.1)" : "none",
             } }, "\u732E\u7ACB\u7DE8\u96C6"));
     return React.createElement("div", { style: { paddingBottom: 24 } },
-        React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 16 } },
-            React.createElement("button", { onClick: onBack, "aria-label": "\u623B\u308B", style: {
-                    border: "none", background: "#fff", borderRadius: "50%", width: 38, height: 38,
-                    display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 1px 4px rgba(46,42,36,0.06)"
-                } }, React.createElement(ChevronLeft, { size: 18, color: COLORS.ink })),
-            React.createElement("h2", { style: { fontSize: 18, fontWeight: 800, margin: 0, color: COLORS.ink } }, "\u732E\u7ACB\u30AB\u30EC\u30F3\u30C0\u30FC")),
         tabs,
         monthNav,
         mode === "plan" && React.createElement(React.Fragment, null,
