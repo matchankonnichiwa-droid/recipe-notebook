@@ -4566,7 +4566,7 @@ function App() {
     const [mode, setMode] = useState(() => {
         try {
             const saved = localStorage.getItem("appMode");
-            return saved || "recipe";
+            return (saved && saved !== "home") ? saved : "recipe";
         }
         catch {
             return "recipe";
@@ -5115,11 +5115,6 @@ function App() {
                 backdropFilter: "blur(18px)",
                 WebkitBackdropFilter: "blur(18px)",
             } },
-            React.createElement("button", { onClick: () => switchMode("home"), style: {
-                    flex: 1, border: "none", background: "none", padding: "7px 0 5px",
-                    display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
-                    fontSize: 10.5, fontWeight: 700, color: mode === "home" ? COLORS.ink : COLORS.inkSoft,
-                } }, React.createElement(NavIcon, { icon: GridIcon, active: mode === "home", color: COLORS.ink, soft: COLORS.soft }), "ホーム"),
             React.createElement("button", { onClick: () => { switchMode("recipe"); setRecipeInitialView("list"); setRecipeHomeToken((v) => v + 1); setShowSettings(false); }, style: {
                     flex: 1, border: "none", background: "none", padding: "7px 0 5px",
                     display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
@@ -5146,11 +5141,6 @@ function App() {
                     fontSize: 10.5, fontWeight: 700, color: COLORS.inkSoft,
                 } }, React.createElement(NavIcon, { icon: Settings, active: false, color: COLORS.ink, soft: COLORS.soft }), "設定")),
         React.createElement("div", { style: { flex: 1, minHeight: 0, overflowY: "auto", paddingBottom: "calc(70px + env(safe-area-inset-bottom, 0px))", background: COLORS.paper } },
-            mode === "home" && React.createElement(HomeView, { myName: myName, onNavigate: (key) => {
-                    if (key === "recipe") { switchMode("recipe"); setRecipeInitialView("list"); setRecipeHomeToken((v) => v + 1); }
-                    else if (key === "calendar") { switchMode("recipe"); setRecipeInitialView("calendar"); setRecipeHomeToken((v) => v + 1); }
-                    else { switchMode(key); }
-                } }),
             mode === "recipe" && React.createElement(RecipeNotebook, { key: recipeHomeToken, initialView: recipeInitialView, apiKey: apiKey, jinaApiKey: jinaApiKey, categoryOrder: categoryOrder, applianceOrder: applianceOrder }),
             // 買い物・ToDo は同じ画面の中の切り替えタブになった(以前は別々のタブ)。
             // どちらのモードで来ても同じ TodoApp を出し、内部の切り替えタブが
