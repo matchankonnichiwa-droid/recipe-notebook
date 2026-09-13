@@ -1408,7 +1408,7 @@ function sortByDueDate(list) {
 const TODO_FONT_DISPLAY = "'Noto Sans JP', sans-serif";
 const TODO_FONT_BODY = "'Noto Sans JP', sans-serif";
 const LISTS = {
-    todo: { dbKey: "todos", groupsKey: "todos-groups", label: "今日のToDo", placeholder: "やることを入力...", emptyAll: "タスクを追加してみましょう" },
+    todo: { dbKey: "todos", groupsKey: "todos-groups", label: "ToDo", placeholder: "やることを入力...", emptyAll: "タスクを追加してみましょう" },
     shopping: { dbKey: "shopping", groupsKey: "shopping-groups", label: "買い物リスト", placeholder: "買うものを入力...", emptyAll: "買うものを追加してみましょう" },
 };
 const NO_GROUP = "__none__";
@@ -1759,7 +1759,7 @@ function TodoApp({ initialListKey, myName, ungroupedLabels }) {
     }
     const today = new Date();
     const dateStr = today.toLocaleDateString("ja-JP", { month: "long", day: "numeric", weekday: "short" });
-    return React.createElement("div", { style: { fontFamily: TODO_FONT_BODY, background: TODO_PALETTE.paper, minHeight: "100%", maxWidth: 480, margin: "0 auto", display: "flex", flexDirection: "column", color: TODO_PALETTE.ink, fontSize: 13 } }, 
+    return React.createElement("div", { style: { fontFamily: TODO_FONT_BODY, background: TODO_PALETTE.paper, minHeight: "100%", maxWidth: 480, margin: "0 auto", display: "flex", flexDirection: "column", color: TODO_PALETTE.ink, fontSize: 13, position: "relative" } }, 
     // header
     React.createElement("div", { style: { padding: "18px 16px 10px" } },
         React.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 10 } },
@@ -1769,11 +1769,11 @@ function TodoApp({ initialListKey, myName, ungroupedLabels }) {
                     background: activeList === key ? TODO_PALETTE.sage : "transparent",
                     color: activeList === key ? "#fff" : TODO_PALETTE.inkSoft,
                 } }, LISTS[key].label))),
-        React.createElement("div", null,
+        React.createElement("div", { style: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 } },
             React.createElement("div", { style: { fontFamily: TODO_FONT_DISPLAY, fontSize: 24, fontWeight: 800, letterSpacing: "0.01em" } }, LISTS[activeList].label),
-            React.createElement("div", { style: { fontSize: 11, color: TODO_PALETTE.inkSoft, marginTop: 3 } }, dateStr)
-        ),
-        React.createElement("div", { style: { marginTop: 10, fontSize: 11, color: TODO_PALETTE.inkSoft } }, activeList === "todo" ? "やることを整理しています" : "買うものを売り場ごとに自動でまとめています")
+            React.createElement("div", { style: { flexShrink: 0, textAlign: "right" } },
+                React.createElement("div", { style: { fontSize: 11, color: TODO_PALETTE.inkSoft } }, dateStr),
+                myName && React.createElement("div", { style: { fontSize: 11, color: TODO_PALETTE.inkSoft, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 5, marginTop: 3 } }, React.createElement("span", { style: { width: 7, height: 7, borderRadius: "50%", background: colorForName(myName).dot, display: "inline-block" } }), `あなた：${myName}`)))
     ), (currentGroups.length > 0 || recipeCount > 0) && React.createElement("div", { style: { display: "flex", gap: 6, padding: "0 14px 8px", overflowX: "auto", WebkitOverflowScrolling: "touch" } }, [
         { key: "all", label: `すべて (${remaining})` },
         ...(recipeCount > 0 ? [{ key: RECIPE_GROUP, label: `レシピ (${recipeCount})` }] : []),
@@ -1782,7 +1782,7 @@ function TodoApp({ initialListKey, myName, ungroupedLabels }) {
     ].map((f) => React.createElement("button", { key: f.key, onClick: () => setGroupFilter(f.key),
         style: { flexShrink: 0, cursor: "pointer", padding: "6px 12px", borderRadius: 10, fontSize: 12.5, fontWeight: 700, fontFamily: TODO_FONT_DISPLAY, whiteSpace: "nowrap",
             background: groupFilter === f.key ? TODO_PALETTE.ink : TODO_PALETTE.card, color: groupFilter === f.key ? "#fff" : TODO_PALETTE.inkSoft,
-            border: groupFilter === f.key ? "none" : `1px solid ${TODO_PALETTE.line}` } }, f.label))), myName && React.createElement("div", { style: { margin: "0 14px 8px", fontSize: 11, color: TODO_PALETTE.inkSoft, display: "flex", alignItems: "center", gap: 5 } }, React.createElement("span", { style: { width: 7, height: 7, borderRadius: "50%", background: colorForName(myName).dot, display: "inline-block" } }), `あなた：${myName}`), 
+            border: groupFilter === f.key ? "none" : `1px solid ${TODO_PALETTE.line}` } }, f.label))),
     // action row (search / complete-all)
     React.createElement("div", { style: { display: "flex", gap: 6, padding: "0 14px 8px", alignItems: "center" } }, activeList === "shopping" && currentItems.some((t) => !t.done) && React.createElement("button", { onClick: completeAll, title: "すべて完了にする",
         style: { border: `1px solid ${TODO_PALETTE.sage}`, cursor: "pointer", background: TODO_PALETTE.sageSoft, color: TODO_PALETTE.sage, fontSize: 11, fontFamily: TODO_FONT_BODY, borderRadius: 999, padding: "4px 10px", whiteSpace: "nowrap" } }, "\u2713 \u4E00\u62EC\u5B8C\u4E86"), React.createElement("button", { onClick: () => setShowSearch((s) => !s), "aria-label": "検索",
@@ -1916,10 +1916,10 @@ function TodoApp({ initialListKey, myName, ungroupedLabels }) {
             bottom: "calc(82px + env(safe-area-inset-bottom, 0px))",
             width: 58, height: 58, borderRadius: "50%",
             border: "none", background: TODO_PALETTE.sage, color: "#fff",
-            display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60,
-            boxShadow: "0 10px 28px rgba(67,84,69,0.28)"
-        }
-    }, React.createElement(Plus, { size: 26 })),
+                display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60,
+                boxShadow: "0 10px 28px rgba(67,84,69,0.28)"
+            }
+        }, React.createElement(Plus, { size: 26 })),
     openDetailId && React.createElement(ItemDetailModal, {
         item: currentItems.find((t) => t.id === openDetailId),
         groupsList: currentGroups,
@@ -2828,7 +2828,7 @@ function Header({ view, onBack, isFavorite, onToggleFavorite, onEdit, editDisabl
             React.createElement("button", { onClick: onArmDelete, "aria-label": "\u524A\u9664", style: { background: "none", border: "none", padding: 8, cursor: "pointer", display: "flex" } },
                 React.createElement(Trash2, { size: 18, color: COLORS.inkSoft }))))))) : (React.createElement(React.Fragment, null,
         React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 3 } },
-            React.createElement("div", { style: { fontSize: 10, letterSpacing: "0.18em", fontWeight: 700, color: COLORS.sage } }, "MY KITCHEN"),
+            view !== "calendar" && React.createElement("div", { style: { fontSize: 10, letterSpacing: "0.18em", fontWeight: 700, color: COLORS.sage } }, "MY KITCHEN"),
             React.createElement("h1", { style: {
                     fontFamily: "'Noto Sans JP', sans-serif",
                     fontSize: 27,
@@ -2836,7 +2836,7 @@ function Header({ view, onBack, isFavorite, onToggleFavorite, onEdit, editDisabl
                     margin: 0,
                     letterSpacing: "-0.04em",
                     lineHeight: 1.18,
-                } }, "\u30EC\u30B7\u30D4\u30CE\u30FC\u30C8"))))));
+                } }, view === "calendar" ? "献立" : "レシピノート"))))));
 }
 function groupByDishCategory(recipes) {
     const groups = {};
@@ -4419,7 +4419,7 @@ function SettingsPanel({
     return React.createElement("div",{style:{position:"fixed",inset:0,zIndex:110,background:COLORS.paper,overflowY:"auto",paddingBottom:"calc(30px + env(safe-area-inset-bottom,0px))"}},
         React.createElement("div",{style:{position:"sticky",top:0,zIndex:2,display:"grid",gridTemplateColumns:"44px 1fr 44px",alignItems:"center",padding:"calc(13px + env(safe-area-inset-top,0px)) 14px 12px",background:"rgba(247,246,242,.95)",backdropFilter:"blur(16px)"}},
             React.createElement("button",{onClick:onClose,style:{border:"none",background:"none",width:40,height:40,display:"grid",placeItems:"center"}},React.createElement(ChevronLeft,{size:26})),
-            React.createElement("h2",{style:{fontSize:20,fontWeight:800,textAlign:"center",margin:0}},"設定"),
+            React.createElement("h2",{style:{fontFamily:"'Noto Sans JP', sans-serif",fontSize:27,fontWeight:700,letterSpacing:"-0.04em",textAlign:"center",margin:0}},"設定"),
             React.createElement("div",null)
         ),
         React.createElement("div",{style:{maxWidth:520,margin:"0 auto",padding:"14px 14px 28px"}},
@@ -5129,7 +5129,7 @@ function App() {
                     flex: 1, border: "none", background: "none", padding: "7px 0 5px",
                     display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
                     fontSize: 10.5, fontWeight: 700, color: (mode === "shopping" || mode === "todo") ? COLORS.featureShopping : COLORS.inkSoft,
-                } }, React.createElement(NavIcon, { icon: ClipboardPaste, active: mode === "shopping" || mode === "todo", color: COLORS.featureShopping, soft: COLORS.featureShoppingSoft }), "買い物"),
+                } }, React.createElement(NavIcon, { icon: ClipboardPaste, active: mode === "shopping" || mode === "todo", color: COLORS.featureShopping, soft: COLORS.featureShoppingSoft }), "買い物/todo"),
             React.createElement("button", { onClick: () => switchMode("prints"), style: {
                     flex: 1, border: "none", background: "none", padding: "7px 0 5px",
                     display: "flex", flexDirection: "column", alignItems: "center", gap: 2,

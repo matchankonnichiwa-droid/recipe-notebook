@@ -110,7 +110,7 @@ function PrintListView({ printIndex, printsLoaded, printPeople, onOpenAdd, onOpe
     };
     return React.createElement("div", { style: { padding: "16px 16px 100px" } },
         React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 } },
-            React.createElement("h1", { style: { fontSize: 22, fontWeight: 800, margin: 0, color: COLORS.ink } }, "プリント"),
+            React.createElement("h1", { style: { fontFamily: "'Noto Sans JP', sans-serif", fontSize: 27, fontWeight: 700, letterSpacing: "-0.04em", margin: 0, color: COLORS.ink } }, "プリント"),
             React.createElement("button", { onClick: onOpenAdd, style: {
                     display: "flex", alignItems: "center", gap: 4, background: COLORS.accent, color: "#fff",
                     border: "none", borderRadius: 999, padding: "8px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer",
