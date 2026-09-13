@@ -2836,7 +2836,7 @@ function Header({ view, onBack, isFavorite, onToggleFavorite, onEdit, editDisabl
                     margin: 0,
                     letterSpacing: "-0.04em",
                     lineHeight: 1.18,
-                } }, view === "calendar" ? "献立" : "レシピノート"))))));
+                } }, view === "calendar" ? "献立カレンダー" : "レシピノート"))))));
 }
 function groupByDishCategory(recipes) {
     const groups = {};
