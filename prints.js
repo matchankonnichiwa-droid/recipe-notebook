@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { FiPlus as Plus, FiX as X, FiCamera as Camera, FiFileText as FileText, FiCheck as Check, FiChevronLeft as ChevronLeft, FiEdit2 as Edit2, FiSearch as Search } from "react-icons/fi";
+import { FiPlus as Plus, FiX as X, FiCamera as Camera, FiFileText as FileText, FiCheck as Check, FiChevronLeft as ChevronLeft, FiEdit2 as Edit2, FiSearch as Search, FiRotateCw as RotateCw } from "react-icons/fi";
 
 // This chunk is loaded on demand (only when the プリント tab is opened) —
 // see LazyPrintsView in app.js. Purpose: photograph paper documents (school
@@ -66,30 +66,57 @@ function fileToDocumentPhoto(file) {
 }
 
 function PrintListCard({ print, onOpen, onDelete }) {
-    return React.createElement("div", { style: {
-            position: "relative", background: "#fff", borderRadius: RADIUS.cardSmall,
-            border: `1px solid ${COLORS.line}`, padding: 10, display: "flex", gap: 10,
-            alignItems: "center", marginBottom: 10, cursor: "pointer",
-        }, onClick: () => onOpen(print.id) },
-        React.createElement("div", { style: {
-                width: 56, height: 56, borderRadius: 10, flexShrink: 0, background: COLORS.chipBg,
-                display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden",
-            } },
-            print.thumbnailUrl
-                ? React.createElement("img", { src: print.thumbnailUrl, alt: "", style: { width: "100%", height: "100%", objectFit: "cover" } })
-                : React.createElement(FileText, { size: 20, color: COLORS.inkSoft })),
-        React.createElement("div", { style: { flex: 1, minWidth: 0 } },
-            React.createElement("p", { style: { fontSize: 14, fontWeight: 700, color: COLORS.ink, margin: "0 0 4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, print.title || "無題のプリント"),
-            React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" } },
-                print.date && React.createElement("span", { style: { fontSize: 12, color: COLORS.inkSoft } }, print.date),
-                (print.personTags || []).map((p) => React.createElement("span", { key: p, style: {
-                        fontSize: 11, fontWeight: 700, color: COLORS.mustard, background: "#F5EDE1", borderRadius: 999, padding: "2px 8px",
-                    } }, p)))),
-        React.createElement("button", { onClick: (e) => { e.stopPropagation(); onDelete(print.id); }, "aria-label": "削除", style: {
-                position: "absolute", top: -6, right: -6, width: 26, height: 26, borderRadius: 999,
-                border: "2px solid #fff", background: COLORS.plum, color: "#fff",
+    const [swipeX, setSwipeX] = useState(0); // 0 = closed, negative = revealed
+    const dragStart = useRef(null);
+    const REVEAL_WIDTH = 72;
+    const handleTouchStart = (e) => {
+        dragStart.current = { x: e.touches[0].clientX, startSwipe: swipeX };
+    };
+    const handleTouchMove = (e) => {
+        if (!dragStart.current)
+            return;
+        const delta = e.touches[0].clientX - dragStart.current.x;
+        const next = Math.min(0, Math.max(-REVEAL_WIDTH, dragStart.current.startSwipe + delta));
+        setSwipeX(next);
+    };
+    const handleTouchEnd = () => {
+        dragStart.current = null;
+        // Snap to fully open or fully closed rather than leaving it
+        // part-way — a light flick should be enough to reveal it.
+        setSwipeX((x) => (x < -REVEAL_WIDTH / 2 ? -REVEAL_WIDTH : 0));
+    };
+    return React.createElement("div", { style: { position: "relative", marginBottom: 10, borderRadius: RADIUS.cardSmall, overflow: "hidden" } },
+        // delete button, revealed from behind the card as it slides left
+        React.createElement("button", { onClick: () => onDelete(print.id), "aria-label": "削除", style: {
+                position: "absolute", top: 0, right: 0, bottom: 0, width: REVEAL_WIDTH,
+                border: "none", background: COLORS.plum, color: "#fff",
                 display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-            } }, React.createElement(X, { size: 14 })));
+            } }, React.createElement(X, { size: 18 })),
+        React.createElement("div", {
+                onClick: () => (swipeX === 0 ? onOpen(print.id) : setSwipeX(0)),
+                onTouchStart: handleTouchStart, onTouchMove: handleTouchMove, onTouchEnd: handleTouchEnd,
+                style: {
+                    position: "relative", background: "#fff",
+                    border: `1px solid ${COLORS.line}`, padding: 10, display: "flex", gap: 10,
+                    alignItems: "center", cursor: "pointer",
+                    transform: `translateX(${swipeX}px)`,
+                    transition: dragStart.current ? "none" : "transform 0.2s",
+                },
+            },
+            React.createElement("div", { style: {
+                    width: 56, height: 56, borderRadius: 10, flexShrink: 0, background: COLORS.chipBg,
+                    display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden",
+                } },
+                print.thumbnailUrl
+                    ? React.createElement("img", { src: print.thumbnailUrl, alt: "", style: { width: "100%", height: "100%", objectFit: "cover" } })
+                    : React.createElement(FileText, { size: 20, color: COLORS.inkSoft })),
+            React.createElement("div", { style: { flex: 1, minWidth: 0 } },
+                React.createElement("p", { style: { fontSize: 14, fontWeight: 700, color: COLORS.ink, margin: "0 0 4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, print.title || "無題のプリント"),
+                React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" } },
+                    print.date && React.createElement("span", { style: { fontSize: 12, color: COLORS.inkSoft } }, print.date),
+                    (print.personTags || []).map((p) => React.createElement("span", { key: p, style: {
+                            fontSize: 11, fontWeight: 700, color: COLORS.mustard, background: "#F5EDE1", borderRadius: 999, padding: "2px 8px",
+                        } }, p))))));
 }
 
 function PrintListView({ printIndex, printsLoaded, printPeople, onOpenAdd, onOpenDetail, onDelete }) {
@@ -139,7 +166,28 @@ function PrintListView({ printIndex, printsLoaded, printPeople, onOpenAdd, onOpe
                 : filtered.map((p) => React.createElement(PrintListCard, { key: p.id, print: p, onOpen: onOpenDetail, onDelete: handleDelete })));
 }
 
-function PhotoThumb({ url, onRemove, onView }) {
+// Rotates a data URL 90° clockwise by redrawing it onto a canvas with the
+// dimensions swapped — used by the manual rotate button below, since
+// reliably auto-detecting text orientation isn't something this can do
+// without a real OCR/vision service.
+function rotateDataUrl90(dataUrl) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement("canvas");
+            canvas.width = img.naturalHeight;
+            canvas.height = img.naturalWidth;
+            const ctx = canvas.getContext("2d");
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.rotate(Math.PI / 2);
+            ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
+            resolve(canvas.toDataURL("image/jpeg", 0.85));
+        };
+        img.onerror = reject;
+        img.src = dataUrl;
+    });
+}
+function PhotoThumb({ url, onRemove, onView, onRotate, onMoveLeft, onMoveRight }) {
     return React.createElement("div", { style: { position: "relative", width: 84, height: 84, flexShrink: 0 } },
         React.createElement("img", { src: url, alt: "", onClick: onView, style: {
                 width: "100%", height: "100%", objectFit: "cover", borderRadius: 10,
@@ -149,7 +197,21 @@ function PhotoThumb({ url, onRemove, onView }) {
                 position: "absolute", top: -6, right: -6, width: 22, height: 22, borderRadius: 999,
                 border: "2px solid #fff", background: COLORS.plum, color: "#fff",
                 display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0,
-            } }, React.createElement(X, { size: 12 })));
+            } }, React.createElement(X, { size: 12 })),
+        onRotate && React.createElement("button", { onClick: onRotate, "aria-label": "回転", title: "90\u00B0\u56DE\u8EE2", style: {
+                position: "absolute", bottom: -6, right: -6, width: 22, height: 22, borderRadius: 999,
+                border: "2px solid #fff", background: COLORS.sage, color: "#fff",
+                display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0,
+            } }, React.createElement(RotateCw, { size: 12 })),
+        (onMoveLeft || onMoveRight) && React.createElement("div", { style: { position: "absolute", bottom: -6, left: -6, display: "flex", gap: 2 } },
+            onMoveLeft && React.createElement("button", { onClick: onMoveLeft, "aria-label": "\u5DE6\u3078\u79FB\u52D5", style: {
+                    width: 20, height: 20, borderRadius: 999, border: "2px solid #fff", background: COLORS.ink, color: "#fff",
+                    display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, fontSize: 11,
+                } }, "\u2039"),
+            onMoveRight && React.createElement("button", { onClick: onMoveRight, "aria-label": "\u53F3\u3078\u79FB\u52D5", style: {
+                    width: 20, height: 20, borderRadius: 999, border: "2px solid #fff", background: COLORS.ink, color: "#fff",
+                    display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, fontSize: 11,
+                } }, "\u203A")));
 }
 
 function PrintForm({ initial, printPeople, onSave, onCancel, onAddPerson, saveError }) {
@@ -192,16 +254,36 @@ function PrintForm({ initial, printPeople, onSave, onCancel, onAddPerson, saveEr
             await new Promise((r) => setTimeout(r, 0));
         }
     };
+    const [saveTimedOut, setSaveTimedOut] = useState(false);
     const handleSave = async () => {
         setSaving(true);
-        await onSave({ ...(initial || {}), title: title.trim() || "無題のプリント", date, personTags, photos: photos.map((p) => p.full) });
-        setSaving(false);
+        setSaveTimedOut(false);
+        // With many high-quality photos the upload can genuinely take a
+        // while on a slow connection — but previously there was no upper
+        // bound at all, so a stalled or failed request just left the
+        // button reading "保存中…" forever with no way to tell whether it
+        // was still working or actually stuck. A timeout, plus a real
+        // try/catch, means it always resolves one way or the other.
+        const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 45000));
+        try {
+            await Promise.race([
+                onSave({ ...(initial || {}), title: title.trim() || "無題のプリント", date, personTags, photos: photos.map((p) => p.full) }),
+                timeout,
+            ]);
+        }
+        catch (e) {
+            setSaveTimedOut(true);
+        }
+        finally {
+            setSaving(false);
+        }
     };
     return React.createElement("div", { style: { padding: "16px 16px 100px" } },
         React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 16 } },
             React.createElement("button", { onClick: onCancel, style: { border: "none", background: "none", padding: 6, display: "flex" } }, React.createElement(ChevronLeft, { size: 20, color: COLORS.inkSoft })),
             React.createElement("h1", { style: { fontSize: 17, fontWeight: 800, margin: 0, color: COLORS.ink, flex: 1 } }, initial?.id ? "プリントを編集" : "プリントを追加")),
         saveError && React.createElement("p", { style: { color: COLORS.plum, fontSize: 12.5, marginBottom: 10 } }, saveError),
+        saveTimedOut && React.createElement("p", { style: { color: COLORS.plum, fontSize: 12.5, marginBottom: 10, lineHeight: 1.6 } }, "\u4FDD\u5B58\u306B\u6642\u9593\u304C\u304B\u304B\u308A\u3059\u304E\u3066\u4E2D\u65AD\u3057\u307E\u3057\u305F\u3002\u901A\u4FE1\u74B0\u5883\u306E\u826F\u3044\u5834\u6240\u3067\u3082\u3046\u4E00\u5EA6\u304A\u8A66\u3057\u304F\u3060\u3055\u3044\u3002\u5199\u771F\u306E\u679A\u6570\u3092\u6E1B\u3089\u3059\u3068\u6210\u529F\u3057\u3084\u3059\u304F\u306A\u308A\u307E\u3059\u3002"),
         React.createElement("label", { style: { display: "block", fontSize: 12, fontWeight: 700, color: COLORS.inkSoft, margin: "0 0 6px" } }, "タイトル"),
         React.createElement("input", { value: title, onChange: (e) => setTitle(e.target.value), placeholder: "例: 4月 学校だより", style: {
                 width: "100%", padding: "11px 12px", borderRadius: 10, border: `1px solid ${COLORS.line}`, fontSize: 15, marginBottom: 16, boxSizing: "border-box",
@@ -237,17 +319,53 @@ function PrintForm({ initial, printPeople, onSave, onCancel, onAddPerson, saveEr
                     } }, React.createElement(Plus, { size: 13 }), "追加")),
         React.createElement("label", { style: { display: "block", fontSize: 12, fontWeight: 700, color: COLORS.inkSoft, margin: "0 0 6px" } }, `写真(最大${MAX_PHOTOS}枚・文字が読める画質で保存)`),
         React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 } },
-            photos.map((p, i) => React.createElement(PhotoThumb, { key: i, url: p.thumb, onRemove: () => setPhotos((prev) => prev.filter((_, idx) => idx !== i)) })),
-            photos.length < MAX_PHOTOS && React.createElement("label", { style: {
-                    width: 84, height: 84, borderRadius: 10, border: `1.5px dashed ${COLORS.accent}`,
-                    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "pointer", gap: 4,
-                } },
-                React.createElement(Camera, { size: 20, color: COLORS.accent }),
-                React.createElement("span", { style: { fontSize: 10, color: COLORS.accent, fontWeight: 700 } }, `${photos.length}/${MAX_PHOTOS}`),
-                React.createElement("input", { type: "file", accept: "image/*", multiple: true, style: { display: "none" }, onChange: (e) => {
-                        handleFiles(e.target.files);
-                        e.target.value = "";
-                    } }))),
+            photos.map((p, i) => React.createElement(PhotoThumb, {
+                key: i, url: p.thumb,
+                onRemove: () => setPhotos((prev) => prev.filter((_, idx) => idx !== i)),
+                onRotate: async () => {
+                    const [full, thumb] = await Promise.all([rotateDataUrl90(p.full), rotateDataUrl90(p.thumb)]);
+                    setPhotos((prev) => prev.map((ph, idx) => idx === i ? { full, thumb } : ph));
+                },
+                onMoveLeft: i > 0 ? () => setPhotos((prev) => {
+                    const next = [...prev];
+                    [next[i - 1], next[i]] = [next[i], next[i - 1]];
+                    return next;
+                }) : null,
+                onMoveRight: i < photos.length - 1 ? () => setPhotos((prev) => {
+                    const next = [...prev];
+                    [next[i + 1], next[i]] = [next[i], next[i + 1]];
+                    return next;
+                }) : null,
+            })),
+            photos.length < MAX_PHOTOS && React.createElement(React.Fragment, null,
+                React.createElement("label", { style: {
+                        width: 84, height: 84, borderRadius: 10, border: `1.5px dashed ${COLORS.accent}`,
+                        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "pointer", gap: 4,
+                    } },
+                    React.createElement(Camera, { size: 20, color: COLORS.accent }),
+                    React.createElement("span", { style: { fontSize: 10, color: COLORS.accent, fontWeight: 700 } }, `${photos.length}/${MAX_PHOTOS}`),
+                    // capture="environment" goes straight to the camera —
+                    // skipping the "カメラ / ライブラリ" chooser sheet that
+                    // a plain file input shows means one less tap needed
+                    // for each additional photo taken in a row (the camera
+                    // itself still only returns one shot at a time — that
+                    // part is a platform limitation, not something a web
+                    // page can change — but this at least removes the
+                    // extra step around it).
+                    React.createElement("input", { type: "file", accept: "image/*", capture: "environment", style: { display: "none" }, onChange: (e) => {
+                            handleFiles(e.target.files);
+                            e.target.value = "";
+                        } })),
+                React.createElement("label", { style: {
+                        width: 84, height: 84, borderRadius: 10, border: `1.5px dashed ${COLORS.line}`,
+                        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "pointer", gap: 4,
+                    } },
+                    React.createElement(FileText, { size: 20, color: COLORS.inkSoft }),
+                    React.createElement("span", { style: { fontSize: 9.5, color: COLORS.inkSoft, fontWeight: 700 } }, "\u30E9\u30A4\u30D6\u30E9\u30EA"),
+                    React.createElement("input", { type: "file", accept: "image/*", multiple: true, style: { display: "none" }, onChange: (e) => {
+                            handleFiles(e.target.files);
+                            e.target.value = "";
+                        } })))),
         processingCount > 0 && React.createElement("p", { style: { fontSize: 12, color: COLORS.inkSoft, marginBottom: 16 } }, `処理中… 残り${processingCount}枚`),
         processingCount === 0 && React.createElement("div", { style: { marginBottom: 16 } }),
         React.createElement("button", { onClick: handleSave, disabled: saving, style: {
