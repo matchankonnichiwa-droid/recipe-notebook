@@ -12,23 +12,15 @@
 // deliberately left alone — those are either live data or third-party
 // origins, not something this app should be caching.
 //
-// v3 note: still saw the same error recur later. Root-caused further: even
-// during *install* (pre-caching APP_FILES), Cache.addAll() itself rejects
-// if any response it fetches turns out to be redirected — so a redirecting
-// host can poison things before a single page-load even happens. Install
-// now fetches+strips each file manually instead of trusting addAll. Also,
-// as of v3, navigation requests are no longer intercepted by this service
-// worker at all (see the fetch handler) — the safest fix, since that's the
-// one request type iOS won't tolerate a redirected answer for.
+// v2 note: v1 cached the bare "./" path, which some static hosts serve as a
+// redirect to "/index.html". iOS refuses to let a service worker answer a
+// *navigation* request (i.e. actually launching the home-screen app) with a
+// redirected Response — that's exactly what broke launching from the home
+// screen. Fixed by dropping "./" from the cached list and by always
+// re-wrapping any redirected response into a fresh, non-redirected one
+// before it's cached or returned.
 
-// v4 note: found the real reason updates never seemed to stick, even after
-// reopening the app several times. The background revalidation fetch in
-// the "fetch" handler was never wrapped in event.waitUntil() — so the
-// browser was free to kill the service worker the moment it returned the
-// cached response, before the background fetch+cache.put() had a chance to
-// finish. The cache was never actually being updated. Fixed below.
-
-const CACHE_VERSION = "v4";
+const CACHE_VERSION = "v2";
 const CACHE_NAME = `recipe-app-${CACHE_VERSION}`;
 
 const APP_FILES = [
@@ -65,21 +57,7 @@ async function stripRedirect(response) {
 
 self.addEventListener("install", (event) => {
     event.waitUntil(
-        caches.open(CACHE_NAME).then((cache) =>
-            Promise.all(
-                APP_FILES.map((path) =>
-                    fetch(path)
-                        .then((response) => stripRedirect(response))
-                        .then((clean) => cache.put(path, clean))
-                        .catch(() => {
-                            // If one file fails to pre-cache (offline install,
-                            // flaky network, etc.), don't fail the whole
-                            // install — it'll just be fetched fresh on first
-                            // use instead of coming from cache immediately.
-                        })
-                )
-            )
-        )
+        caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_FILES))
     );
     self.skipWaiting();
 });
@@ -99,18 +77,10 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
     const url = new URL(event.request.url);
+    // Only handle our own same-origin GET requests for the files above —
+    // everything else (Firebase, APIs, CDN scripts) passes straight through
+    // to the network untouched.
     if (event.request.method !== "GET" || url.origin !== self.location.origin)
-        return;
-    // Navigation requests (actually launching/reloading the page, as
-    // opposed to a script/image/etc. sub-resource fetch) are the specific
-    // case iOS refuses to let a service worker answer with anything
-    // redirected — and are also the request most likely to hit a redirect
-    // if the hosting URL itself ever changes. Rather than keep patching
-    // around that, just let the browser handle navigations directly,
-    // completely untouched by this service worker. Sub-resources (the
-    // actual JS/image files, which is where the real speed benefit is)
-    // still go through the cache below as before.
-    if (event.request.mode === "navigate")
         return;
 
     event.respondWith(
@@ -125,19 +95,7 @@ self.addEventListener("fetch", (event) => {
                     return stripRedirect(response);
                 })
                 .catch(() => cached); // offline: fall back to whatever's cached
-            if (cached) {
-                // Serve the cached copy immediately, but keep the service
-                // worker alive with waitUntil() until the background
-                // refetch/cache.put() actually finishes — without this, the
-                // browser can (and reliably does) kill the worker the
-                // instant respondWith() resolves, silently dropping the
-                // "revalidate" half of stale-while-revalidate. That was the
-                // real reason updates never seemed to arrive even after
-                // reopening the app multiple times.
-                event.waitUntil(networkFetch);
-                return cached;
-            }
-            return networkFetch;
+            return cached || networkFetch;
         })
     );
 });

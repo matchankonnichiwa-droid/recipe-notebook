@@ -6,38 +6,26 @@ import { FiPlus as Plus, FiChevronLeft as ChevronLeft, FiX as X, FiBookOpen as B
 // bundle — the meal-plan feature is substantial and most visits do not
 // touch it right away.
 const COLORS = {
-    paper: "#FAF8F3",
+    paper: "#F7F6F2",
     paperCard: "#FFFFFF",
-    soft: "#F4F0E8",
-    ink: "#383631",
-    inkSoft: "#777269",
-    inkLight: "#A29D94",
-    mustard: "#C9856B",
-    sage: "#7F947C",
-    sageDark: "#637460",
-    sageSoft: "#E7EEE5",
-    plum: "#C66C66",
-    dangerSoft: "#F8E8E6",
-    cream: "#F3EBDD",
-    terracotta: "#C9856B",
-    terracottaLight: "#F5E7E0",
-    line: "#EAE5DC",
-    accent: "#7F947C",
-    accentSoft: "#E7EEE5",
-    chipBg: "#F4F0E8",
+    ink: "#20231F",
+    inkSoft: "#7E827C",
+    mustard: "#B18A57",
+    sage: "#6F806F",
+    sageSoft: "#E8EDE7",
+    plum: "#B86A68",
+    line: "#E7E5DF",
+    accent: "#6F806F",
+    accentSoft: "#E8EDE7",
+    chipBg: "#EEEDE8",
 };
-const RADIUS = { card: 22, cardSmall: 17, button: 16, input: 15, chip: 999, image: 20 };
-const SHADOW = { soft: "0 2px 12px rgba(65,55,45,0.05)", lifted: "0 5px 24px rgba(65,55,45,0.08)" };
 const MAIN_CATEGORIES = ["ご飯もの", "肉料理", "魚介料理", "麺類"];
-const SIDE_CATEGORIES = ["野菜料理"];
-const SOUP_CATEGORIES = ["スープ・鍋"];
+const SIDE_CATEGORIES = ["野菜料理", "スープ・鍋"];
 function entryRole(entry) {
     if (MAIN_CATEGORIES.includes(entry.dishCategory))
         return { label: "主菜", color: "#C0604A", bg: "#FBEAE5" };
     if (SIDE_CATEGORIES.includes(entry.dishCategory))
         return { label: "副菜", color: "#3F7A4E", bg: "#DFF0E1" };
-    if (SOUP_CATEGORIES.includes(entry.dishCategory))
-        return { label: "スープ", color: "#3E6E8E", bg: "#E3EEF4" };
     return null;
 }
 // Meal-plan entries store a snapshot of {recipeId,title,imageUrl,...} taken
@@ -58,53 +46,47 @@ function liveEntry(entry, recipesById) {
     };
 }
 // Dish card used in the edit view: photo, role badge, remove (X), and a
-// swap icon — one card per assigned recipe. Kept compact (small photo,
-// icon-only swap control, no "変更する" label) so four of these fit in a
-// row on a phone screen without feeling cramped — a person wanted all four
-// meal slots (主菜/副菜/スープ/もう1品) visible side by side rather than
-// wrapped onto a second row.
+// "変更する" swap link — one card per assigned recipe.
 function DishCard({ entry, roleLabel, onSelectRecipe, onRemoveEntry, onSwapEntry }) {
-    const role = entryRole(entry) || (roleLabel === "主菜" ? { label: "主菜", color: "#C0604A", bg: "#FBEAE5" } : roleLabel === "副菜" ? { label: "副菜", color: "#3F7A4E", bg: "#DFF0E1" } : roleLabel === "スープ" ? { label: "スープ", color: "#3E6E8E", bg: "#E3EEF4" } : null);
-    return React.createElement("div", { style: { borderRadius: 12, overflow: "hidden", background: "#fff", border: `1px solid ${COLORS.line}` } },
-        React.createElement("div", { style: { position: "relative", width: "100%", height: 68, background: COLORS.chipBg } },
+    const role = entryRole(entry) || (roleLabel === "主菜" ? { label: "主菜", color: "#C0604A", bg: "#FBEAE5" } : roleLabel === "副菜" ? { label: "副菜", color: "#3F7A4E", bg: "#DFF0E1" } : null);
+    return React.createElement("div", { style: { borderRadius: 14, overflow: "hidden", background: "#fff", border: `1px solid ${COLORS.line}` } },
+        React.createElement("div", { style: { position: "relative", width: "100%", height: 112, background: COLORS.chipBg } },
             React.createElement("div", { onClick: () => onSelectRecipe && onSelectRecipe(entry.recipeId), style: {
                     width: "100%", height: "100%", cursor: onSelectRecipe ? "pointer" : "default",
                 } },
                 entry.imageUrl ? React.createElement("img", { src: entry.imageUrl, alt: "", style: { width: "100%", height: "100%", objectFit: "cover" } })
-                    : React.createElement("div", { style: { width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" } }, React.createElement(BookOpen, { size: 16, color: COLORS.inkSoft }))),
+                    : React.createElement("div", { style: { width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" } }, React.createElement(BookOpen, { size: 22, color: COLORS.inkSoft }))),
             role && React.createElement("span", { style: {
-                    position: "absolute", top: 3, left: 3, fontSize: 9, fontWeight: 800, color: role.color, background: role.bg,
-                    borderRadius: 5, padding: "1px 5px", pointerEvents: "none",
+                    position: "absolute", top: 8, left: 8, fontSize: 11, fontWeight: 800, color: role.color, background: role.bg,
+                    borderRadius: 6, padding: "2px 8px", pointerEvents: "none",
                 } }, role.label),
             // A sibling button, not nested inside the photo's clickable div —
             // nesting interactive elements is invalid HTML and made taps here
             // behave unreliably (the photo's own click could also fire).
             React.createElement("button", { onClick: () => onRemoveEntry(entry.recipeId), "aria-label": "\u524A\u9664", style: {
-                    position: "absolute", top: 3, right: 3, width: 18, height: 18, borderRadius: "50%", border: "none",
+                    position: "absolute", top: 8, right: 8, width: 24, height: 24, borderRadius: "50%", border: "none",
                     background: "rgba(32,35,31,0.55)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0,
-                } }, React.createElement(X, { size: 10 }))),
-        React.createElement("div", { style: { padding: "4px 5px 5px", display: "flex", alignItems: "center", gap: 2 } },
-            React.createElement("p", { style: { fontSize: 10.5, fontWeight: 700, color: COLORS.ink, margin: 0, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, entry.title),
-            role && onSwapEntry && React.createElement("button", { onClick: () => onSwapEntry(entry.recipeId), "aria-label": "\u5909\u66F4\u3059\u308B", style: {
-                    display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, border: "none", background: "none",
-                    color: COLORS.accent, cursor: "pointer", padding: 2,
-                } }, React.createElement(RotateCcw, { size: 11 }))));
+                } }, React.createElement(X, { size: 13 }))),
+        React.createElement("div", { style: { padding: "8px 10px 10px" } },
+            React.createElement("p", { style: { fontSize: 13.5, fontWeight: 700, color: COLORS.ink, margin: "0 0 4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, entry.title),
+            role && onSwapEntry && React.createElement("button", { onClick: () => onSwapEntry(entry.recipeId), style: {
+                    display: "inline-flex", alignItems: "center", gap: 4, border: "none", background: "none",
+                    color: COLORS.accent, fontWeight: 700, fontSize: 12, cursor: "pointer", padding: 0,
+                } }, React.createElement(RotateCcw, { size: 12 }), "\u5909\u66F4\u3059\u308B")));
 }
-// An unfilled 主菜/副菜/スープ slot — always shown (rather than the grid
-// just collapsing when a dish is removed), with its own "+" to fill it
-// back in. Sized to match DishCard's compact footprint.
+// An unfilled 主菜/副菜 slot — always shown (rather than the grid just
+// collapsing when a dish is removed), with its own "+" to fill it back in.
 function EmptySlotCard({ roleLabel, onAdd }) {
     const role = roleLabel === "主菜" ? { label: "主菜", color: "#C0604A", bg: "#FBEAE5" }
         : roleLabel === "副菜" ? { label: "副菜", color: "#3F7A4E", bg: "#DFF0E1" }
-        : roleLabel === "スープ" ? { label: "スープ", color: "#3E6E8E", bg: "#E3EEF4" }
             : { label: roleLabel, color: COLORS.inkSoft, bg: COLORS.chipBg };
     return React.createElement("button", { onClick: onAdd, style: {
-            borderRadius: 12, border: `1.5px dashed ${COLORS.line}`, background: "none", padding: 0, cursor: "pointer",
-            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, height: 98,
+            borderRadius: 14, border: `1.5px dashed ${COLORS.line}`, background: "none", padding: 0, cursor: "pointer",
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, height: 158,
         } },
-        React.createElement("span", { style: { fontSize: 9, fontWeight: 800, color: role.color, background: role.bg, borderRadius: 5, padding: "1px 5px" } }, role.label),
-        React.createElement(Plus, { size: 14, color: COLORS.inkSoft }),
-        React.createElement("span", { style: { fontSize: 9.5, color: COLORS.inkSoft, fontWeight: 700 } }, "\u8FFD\u52A0\u3059\u308B"));
+        React.createElement("span", { style: { fontSize: 11, fontWeight: 800, color: role.color, background: role.bg, borderRadius: 6, padding: "2px 8px" } }, role.label),
+        React.createElement(Plus, { size: 18, color: COLORS.inkSoft }),
+        React.createElement("span", { style: { fontSize: 12, color: COLORS.inkSoft, fontWeight: 700 } }, "\u8FFD\u52A0\u3059\u308B"));
 }
 // Two simple modes, matching how most people actually plan: first pick
 // *which days* need a menu (a calendar you tap dates on), then review and
@@ -220,28 +202,13 @@ function DateSwapSheet({ startDateStr, mealPlan, recipesById, weekdayNames, onCl
 // side dishes) — used to manually fill an empty slot rather than guessing.
 function SlotPickerSheet({ recipes, pool, onClose, onPick }) {
     const [query, setQuery] = useState("");
-    const [categoryFilter, setCategoryFilter] = useState(null);
-    const inPool = useMemo(() => (pool ? recipes.filter((r) => pool.includes(r.dishCategory)) : recipes), [recipes, pool]);
-    const availableCategories = useMemo(() => {
-        const seen = new Set();
-        const list = [];
-        inPool.forEach((r) => {
-            const cat = r.dishCategory || "その他";
-            if (!seen.has(cat)) {
-                seen.add(cat);
-                list.push(cat);
-            }
-        });
-        return list;
-    }, [inPool]);
     const results = useMemo(() => {
-        let list = categoryFilter ? inPool.filter((r) => (r.dishCategory || "その他") === categoryFilter) : inPool;
-        if (query.trim()) {
-            const q = query.trim().toLowerCase();
-            list = list.filter((r) => (r.title || "").toLowerCase().includes(q));
-        }
-        return list.slice(0, 40);
-    }, [inPool, categoryFilter, query]);
+        const inPool = pool ? recipes.filter((r) => pool.includes(r.dishCategory)) : recipes;
+        if (!query.trim())
+            return inPool.slice(0, 40);
+        const q = query.trim().toLowerCase();
+        return inPool.filter((r) => (r.title || "").toLowerCase().includes(q)).slice(0, 40);
+    }, [recipes, pool, query]);
     return React.createElement("div", { style: { position: "fixed", inset: 0, zIndex: 96 } },
         React.createElement("div", { onClick: onClose, style: { position: "absolute", inset: 0, background: "rgba(32,35,31,0.32)" } }),
         React.createElement("div", { style: {
@@ -257,17 +224,6 @@ function SlotPickerSheet({ recipes, pool, onClose, onPick }) {
                     width: "100%", boxSizing: "border-box", border: `1px solid ${COLORS.line}`, borderRadius: 12,
                     padding: "10px 14px", fontSize: 15, marginBottom: 10, color: COLORS.ink, background: "#fff"
                 } }),
-            availableCategories.length > 1 && React.createElement("div", { style: { display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4, marginBottom: 10, WebkitOverflowScrolling: "touch" } },
-                React.createElement("button", { onClick: () => setCategoryFilter(null), style: {
-                        flexShrink: 0, fontSize: 12, padding: "6px 13px", borderRadius: 999, border: "none",
-                        background: !categoryFilter ? COLORS.accent : COLORS.chipBg, color: !categoryFilter ? "#fff" : COLORS.inkSoft,
-                        fontWeight: 700, whiteSpace: "nowrap", cursor: "pointer",
-                    } }, "\u3059\u3079\u3066"),
-                availableCategories.map((cat) => React.createElement("button", { key: cat, onClick: () => setCategoryFilter(categoryFilter === cat ? null : cat), style: {
-                        flexShrink: 0, fontSize: 12, padding: "6px 13px", borderRadius: 999, border: "none",
-                        background: categoryFilter === cat ? COLORS.accent : COLORS.chipBg, color: categoryFilter === cat ? "#fff" : COLORS.inkSoft,
-                        fontWeight: 700, whiteSpace: "nowrap", cursor: "pointer",
-                    } }, cat))),
             results.length === 0 && React.createElement("p", { style: { fontSize: 13, color: COLORS.inkSoft, padding: "12px 2px" } }, "\u898B\u3064\u304B\u308A\u307E\u305B\u3093\u3067\u3057\u305F"),
             results.map((r) => React.createElement("button", { key: r.id, onClick: () => onPick(r), style: {
                     display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", border: "none",
@@ -279,16 +235,8 @@ function SlotPickerSheet({ recipes, pool, onClose, onPick }) {
                     } }, (r.imageUrl || r.imageUrl2) ? React.createElement("img", { src: r.imageUrl || r.imageUrl2, alt: "", style: { width: "100%", height: "100%", objectFit: "cover" } }) : React.createElement(BookOpen, { size: 16, color: COLORS.inkSoft })),
                 React.createElement("span", { style: { fontSize: 14, fontWeight: 650, color: COLORS.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, r.title || "(無題)")))));
 }
-export function CalendarView({ recipes, mealPlan, onAddEntry, onRemoveEntry, onSetDayEntries, onSelectRecipe, onBack, initialMode, onModeChange }) {
-    const [mode, setModeRaw] = useState(initialMode || "plan"); // "plan" | "edit"
-    // Report mode changes upward so the parent can remember which tab
-    // ("献立をたてる" vs "献立編集") was active — this component gets
-    // unmounted while viewing a recipe's detail page and remounted on
-    // return, which would otherwise silently reset back to "plan".
-    const setMode = (next) => {
-        setModeRaw(next);
-        onModeChange && onModeChange(next);
-    };
+export function CalendarView({ recipes, mealPlan, onAddEntry, onRemoveEntry, onSetDayEntries, onSelectRecipe, onBack }) {
+    const [mode, setMode] = useState("plan"); // "plan" | "edit"
     const [selected, setSelected] = useState(new Set());
     const recipesById = useMemo(() => Object.fromEntries(recipes.map((r) => [r.id, r])), [recipes]);
     const todayObj = useMemo(() => { const t = new Date(); t.setHours(0, 0, 0, 0); return t; }, []);
@@ -375,14 +323,9 @@ export function CalendarView({ recipes, mealPlan, onAddEntry, onRemoveEntry, onS
             already.add(main.id);
         }
         const side = pick(SIDE_CATEGORIES);
-        if (side) {
+        if (side)
             onAddEntry(dateStr, side);
-            already.add(side.id);
-        }
-        const soup = pick(SOUP_CATEGORIES);
-        if (soup)
-            onAddEntry(dateStr, soup);
-        return { main, side, soup };
+        return { main, side };
     }
     function handleGenerate() {
         if (selected.size === 0)
@@ -397,13 +340,11 @@ export function CalendarView({ recipes, mealPlan, onAddEntry, onRemoveEntry, onS
             const [y, m, d] = dateStr.split("-").map(Number);
             const date = new Date(y, m - 1, d);
             const avoidIds = new Set(history.filter((h) => Math.abs((date - h.date) / 86400000) <= 21).map((h) => h.recipeId));
-            const { main, side, soup } = pickForDay(dateStr, avoidIds);
+            const { main, side } = pickForDay(dateStr, avoidIds);
             if (main)
                 history.push({ date, recipeId: main.id });
             if (side)
                 history.push({ date, recipeId: side.id });
-            if (soup)
-                history.push({ date, recipeId: soup.id });
         });
         setSelected(new Set());
         setMode("edit");
@@ -413,10 +354,7 @@ export function CalendarView({ recipes, mealPlan, onAddEntry, onRemoveEntry, onS
         const old = entries.find((e) => e.recipeId === oldRecipeId);
         if (!old)
             return;
-        const pool = MAIN_CATEGORIES.includes(old.dishCategory) ? MAIN_CATEGORIES
-            : SIDE_CATEGORIES.includes(old.dishCategory) ? SIDE_CATEGORIES
-            : SOUP_CATEGORIES.includes(old.dishCategory) ? SOUP_CATEGORIES
-                : null;
+        const pool = MAIN_CATEGORIES.includes(old.dishCategory) ? MAIN_CATEGORIES : SIDE_CATEGORIES.includes(old.dishCategory) ? SIDE_CATEGORIES : null;
         if (!pool)
             return;
         const already = new Set(entries.map((e) => e.recipeId));
@@ -461,6 +399,12 @@ export function CalendarView({ recipes, mealPlan, onAddEntry, onRemoveEntry, onS
                 boxShadow: mode === "edit" ? "0 1px 3px rgba(46,42,36,0.1)" : "none",
             } }, "\u732E\u7ACB\u7DE8\u96C6"));
     return React.createElement("div", { style: { paddingBottom: 24 } },
+        React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 16 } },
+            React.createElement("button", { onClick: onBack, "aria-label": "\u623B\u308B", style: {
+                    border: "none", background: "#fff", borderRadius: "50%", width: 38, height: 38,
+                    display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 1px 4px rgba(46,42,36,0.06)"
+                } }, React.createElement(ChevronLeft, { size: 18, color: COLORS.ink })),
+            React.createElement("h2", { style: { fontSize: 18, fontWeight: 800, margin: 0, color: COLORS.ink } }, "\u732E\u7ACB\u30AB\u30EC\u30F3\u30C0\u30FC")),
         tabs,
         monthNav,
         mode === "plan" && React.createElement(React.Fragment, null,
@@ -502,12 +446,11 @@ export function CalendarView({ recipes, mealPlan, onAddEntry, onRemoveEntry, onS
                                     display: "flex", alignItems: "center", gap: 3, border: "none", background: "none",
                                     color: COLORS.plum, fontWeight: 700, fontSize: 11.5, cursor: "pointer", padding: "2px 4px",
                                 } }, React.createElement(Trash2, { size: 12 }), "\u524A\u9664")),
-                        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 6 } },
+                        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 } },
                             (() => {
                                 const mainEntry = entries.find((e) => MAIN_CATEGORIES.includes(e.dishCategory));
                                 const sideEntry = entries.find((e) => SIDE_CATEGORIES.includes(e.dishCategory));
-                                const soupEntry = entries.find((e) => SOUP_CATEGORIES.includes(e.dishCategory));
-                                const freeEntry = entries.find((e) => e !== mainEntry && e !== sideEntry && e !== soupEntry);
+                                const freeEntry = entries.find((e) => e !== mainEntry && e !== sideEntry);
                                 return [
                                     mainEntry
                                         ? React.createElement(DishCard, { key: "main", entry: liveEntry(mainEntry, recipesById), roleLabel: "\u4E3B\u83DC", onSelectRecipe: onSelectRecipe, onRemoveEntry: (recipeId) => onRemoveEntry(dateStr, recipeId), onSwapEntry: (recipeId) => swapEntry(dateStr, recipeId) })
@@ -515,9 +458,6 @@ export function CalendarView({ recipes, mealPlan, onAddEntry, onRemoveEntry, onS
                                     sideEntry
                                         ? React.createElement(DishCard, { key: "side", entry: liveEntry(sideEntry, recipesById), roleLabel: "\u526F\u83DC", onSelectRecipe: onSelectRecipe, onRemoveEntry: (recipeId) => onRemoveEntry(dateStr, recipeId), onSwapEntry: (recipeId) => swapEntry(dateStr, recipeId) })
                                         : React.createElement(EmptySlotCard, { key: "side", roleLabel: "\u526F\u83DC", onAdd: () => setAddSlotFor({ dateStr, pool: SIDE_CATEGORIES }) }),
-                                    soupEntry
-                                        ? React.createElement(DishCard, { key: "soup", entry: liveEntry(soupEntry, recipesById), roleLabel: "\u30B9\u30FC\u30D7", onSelectRecipe: onSelectRecipe, onRemoveEntry: (recipeId) => onRemoveEntry(dateStr, recipeId), onSwapEntry: (recipeId) => swapEntry(dateStr, recipeId) })
-                                        : React.createElement(EmptySlotCard, { key: "soup", roleLabel: "\u30B9\u30FC\u30D7", onAdd: () => setAddSlotFor({ dateStr, pool: SOUP_CATEGORIES }) }),
                                     freeEntry
                                         ? React.createElement(DishCard, { key: "free", entry: liveEntry(freeEntry, recipesById), onSelectRecipe: onSelectRecipe, onRemoveEntry: (recipeId) => onRemoveEntry(dateStr, recipeId) })
                                         : React.createElement(EmptySlotCard, { key: "free", roleLabel: "\u3082\u30461\u54C1", onAdd: () => setAddSlotFor({ dateStr, pool: null }) }),
