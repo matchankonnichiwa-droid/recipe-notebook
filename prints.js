@@ -256,64 +256,6 @@ function PrintForm({ initial, printPeople, onSave, onCancel, onAddPerson, saveEr
             } }, saving ? "保存中…" : "保存する"));
 }
 
-// A pinch-zoomable image, one per photo in the horizontal swipe strip
-// below. Zoom/pan state is local to each instance and reset for free
-// whenever React remounts it (see the `key` used where this is rendered),
-// so swiping to a different photo always comes back to it at 1x rather
-// than carrying over a zoomed-in state from whichever photo was last
-// zoomed.
-function ZoomableImage({ src }) {
-    const [zoom, setZoom] = useState(1);
-    const [pan, setPan] = useState({ x: 0, y: 0 });
-    const pinchState = useRef(null); // { dist, midpoint } from the previous pinch move
-    const getMidpoint = (e, rect) => {
-        const [t1, t2] = e.touches;
-        return {
-            dist: Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY),
-            x: (t1.clientX + t2.clientX) / 2 - rect.left,
-            y: (t1.clientY + t2.clientY) / 2 - rect.top,
-        };
-    };
-    const handleTouchStart = (e) => {
-        if (e.touches.length === 2) {
-            const rect = e.currentTarget.getBoundingClientRect();
-            pinchState.current = getMidpoint(e, rect);
-        }
-    };
-    const handleTouchMove = (e) => {
-        if (e.touches.length === 2 && pinchState.current) {
-            e.preventDefault();
-            e.stopPropagation();
-            const rect = e.currentTarget.getBoundingClientRect();
-            const current = getMidpoint(e, rect);
-            const scaleDelta = current.dist / pinchState.current.dist;
-            setZoom((z) => {
-                const nextZoom = Math.min(4, Math.max(1, z * scaleDelta));
-                setPan((p) => ({
-                    x: current.x - (current.x - p.x) * (nextZoom / z),
-                    y: current.y - (current.y - p.y) * (nextZoom / z),
-                }));
-                return nextZoom;
-            });
-            pinchState.current = current;
-        }
-    };
-    const handleTouchEnd = (e) => {
-        if (e.touches.length < 2) {
-            pinchState.current = null;
-        }
-    };
-    return React.createElement("div", {
-            onTouchStart: handleTouchStart, onTouchMove: handleTouchMove, onTouchEnd: handleTouchEnd,
-            onDoubleClick: () => { setZoom(1); setPan({ x: 0, y: 0 }); },
-            style: { width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", touchAction: zoom > 1 ? "none" : "pan-y" },
-        },
-        React.createElement("img", { src: src, alt: "", draggable: false, style: {
-                maxWidth: "100%", maxHeight: "100%", borderRadius: 8,
-                transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-                transition: pinchState.current ? "none" : "transform 0.15s",
-            } }));
-}
 function PhotoViewer({ photos, startIndex, onClose }) {
     const scrollRef = useRef(null);
     const [currentIndex, setCurrentIndex] = useState(startIndex);
@@ -366,7 +308,7 @@ function PhotoViewer({ photos, startIndex, onClose }) {
                     padding: 16,
                     boxSizing: "border-box",
                 } },
-                React.createElement(ZoomableImage, { key: i, src: url })))),
+                React.createElement("img", { key: i, src: url, alt: "", style: { maxWidth: "100%", maxHeight: "100%", borderRadius: 8 } })))),
         photos.length > 1 && React.createElement("div", { style: {
                 position: "absolute", bottom: "calc(16px + env(safe-area-inset-bottom, 0px))", left: 0, right: 0,
                 textAlign: "center", color: "rgba(255,255,255,0.7)", fontSize: 12.5, fontWeight: 700,
