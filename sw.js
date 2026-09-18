@@ -28,7 +28,14 @@
 // cached response, before the background fetch+cache.put() had a chance to
 // finish. The cache was never actually being updated. Fixed below.
 
-const CACHE_VERSION = "v4";
+// v5 note: プリント機能の写真ズーム周りを何度も直したのに、実機(ホーム画面
+// に追加した状態)でずっと同じ古い症状が再現し続けていた — 最終的な原因は
+// prints.js が APP_FILES の事前キャッシュ対象に入っておらず、しかも
+// stale-while-revalidate の「まず古いキャッシュを即返す」という設計自体が、
+// 動的import(prints.js)のような「初回に取得されたタイミングによっては、
+// 直近まで更新され続けていたファイル」とは相性が悪かったため。
+// バージョンを上げて確実に空のキャッシュからやり直す。
+const CACHE_VERSION = "v5";
 const CACHE_NAME = `recipe-app-${CACHE_VERSION}`;
 
 const APP_FILES = [
@@ -36,6 +43,7 @@ const APP_FILES = [
     "./app.js",
     "./calendar.js",
     "./photo-editor.js",
+    "./prints.js",
     "./manifest.json",
     "./icon-180.png",
     "./icon-192.png",

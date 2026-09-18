@@ -187,12 +187,21 @@ function rotateDataUrl90(dataUrl) {
         img.src = dataUrl;
     });
 }
-function PhotoThumb({ url, onRemove, onView, onRotate, onMoveLeft, onMoveRight }) {
-    return React.createElement("div", { style: { position: "relative", width: 84, height: 84, flexShrink: 0 } },
-        React.createElement("img", { src: url, alt: "", onClick: onView, style: {
+function PhotoThumb({ url, index, onRemove, onView, onRotate, dragProps, dragging }) {
+    return React.createElement("div", { style: { position: "relative", width: 84, height: 84, flexShrink: 0, opacity: dragging ? 0.5 : 1, touchAction: "none" }, ...dragProps },
+        React.createElement("img", { src: url, alt: "", onClick: onView, draggable: false, style: {
                 width: "100%", height: "100%", objectFit: "cover", borderRadius: 10,
                 border: `1px solid ${COLORS.line}`, display: "block", cursor: onView ? "pointer" : "default",
             } }),
+        // Number badge — shows display order at a glance, and doubles as
+        // the drag handle area (dragProps is on the whole thumb, not just
+        // this badge, but seeing "①②③…" is what makes it obvious the
+        // photos can be reordered at all).
+        React.createElement("div", { style: {
+                position: "absolute", top: 4, left: 4, minWidth: 18, height: 18, borderRadius: 9, padding: "0 4px",
+                background: "rgba(56,54,49,0.62)", color: "#fff", fontSize: 10.5, fontWeight: 700,
+                display: "flex", alignItems: "center", justifyContent: "center",
+            } }, index + 1),
         onRemove && React.createElement("button", { onClick: onRemove, "aria-label": "削除", style: {
                 position: "absolute", top: -6, right: -6, width: 22, height: 22, borderRadius: 999,
                 border: "2px solid #fff", background: COLORS.plum, color: "#fff",
@@ -202,16 +211,7 @@ function PhotoThumb({ url, onRemove, onView, onRotate, onMoveLeft, onMoveRight }
                 position: "absolute", bottom: -6, right: -6, width: 22, height: 22, borderRadius: 999,
                 border: "2px solid #fff", background: COLORS.sage, color: "#fff",
                 display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0,
-            } }, React.createElement(RotateCw, { size: 12 })),
-        (onMoveLeft || onMoveRight) && React.createElement("div", { style: { position: "absolute", bottom: -6, left: -6, display: "flex", gap: 2 } },
-            onMoveLeft && React.createElement("button", { onClick: onMoveLeft, "aria-label": "\u5DE6\u3078\u79FB\u52D5", style: {
-                    width: 20, height: 20, borderRadius: 999, border: "2px solid #fff", background: COLORS.ink, color: "#fff",
-                    display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, fontSize: 11,
-                } }, "\u2039"),
-            onMoveRight && React.createElement("button", { onClick: onMoveRight, "aria-label": "\u53F3\u3078\u79FB\u52D5", style: {
-                    width: 20, height: 20, borderRadius: 999, border: "2px solid #fff", background: COLORS.ink, color: "#fff",
-                    display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, fontSize: 11,
-                } }, "\u203A")));
+            } }, React.createElement(RotateCw, { size: 12 })));
 }
 
 function PrintForm({ initial, printPeople, onSave, onCancel, onAddPerson, saveError }) {
@@ -228,6 +228,58 @@ function PrintForm({ initial, printPeople, onSave, onCancel, onAddPerson, saveEr
     const [addingPerson, setAddingPerson] = useState(false);
     const [saving, setSaving] = useState(false);
     const [processingCount, setProcessingCount] = useState(0);
+    // Drag-to-reorder for the photo grid below. dragIndex is which photo
+    // is currently being dragged (for the faded-out styling); didDragRef
+    // tracks whether the touch actually moved enough to count as a drag
+    // rather than a tap, so a plain tap doesn't get swallowed as a
+    // (no-op) drag.
+    const [dragIndex, setDragIndex] = useState(null);
+    const gridRef = useRef(null);
+    const dragStartInfo = useRef(null); // { x, y, index }
+    const didDragRef = useRef(false);
+    const handleThumbTouchStart = (e, index) => {
+        const t = e.touches[0];
+        dragStartInfo.current = { x: t.clientX, y: t.clientY, index };
+        didDragRef.current = false;
+    };
+    const handleGridTouchMove = (e) => {
+        if (!dragStartInfo.current)
+            return;
+        const t = e.touches[0];
+        const dx = t.clientX - dragStartInfo.current.x;
+        const dy = t.clientY - dragStartInfo.current.y;
+        if (!didDragRef.current && Math.hypot(dx, dy) < 10) {
+            // Not enough movement yet to count as a drag — let a plain tap
+            // still work normally.
+            return;
+        }
+        didDragRef.current = true;
+        e.preventDefault();
+        setDragIndex(dragStartInfo.current.index);
+        const el = document.elementFromPoint(t.clientX, t.clientY);
+        const slot = el?.closest("[data-photo-index]");
+        if (!slot)
+            return;
+        const targetIndex = Number(slot.dataset.photoIndex);
+        const fromIndex = dragStartInfo.current.index;
+        if (targetIndex === fromIndex)
+            return;
+        setPhotos((prev) => {
+            const next = [...prev];
+            const [moved] = next.splice(fromIndex, 1);
+            next.splice(targetIndex, 0, moved);
+            return next;
+        });
+        dragStartInfo.current = { ...dragStartInfo.current, index: targetIndex };
+    };
+    const handleGridTouchEnd = () => {
+        dragStartInfo.current = null;
+        setDragIndex(null);
+        // Leave didDragRef true for this tick so the tap handler on the
+        // thumb (which fires right after touchend) can tell a drag just
+        // happened and skip acting like a tap; reset it just after.
+        setTimeout(() => { didDragRef.current = false; }, 0);
+    };
     const togglePerson = (name) => {
         setPersonTags((prev) => prev.includes(name) ? prev.filter((p) => p !== name) : [...prev, name]);
     };
@@ -317,25 +369,23 @@ function PrintForm({ initial, printPeople, onSave, onCancel, onAddPerson, saveEr
                         display: "flex", alignItems: "center", gap: 4, padding: "7px 13px", borderRadius: 999, fontWeight: 700, fontSize: 13,
                         border: `1.5px dashed ${COLORS.line}`, background: "none", color: COLORS.inkSoft, cursor: "pointer",
                     } }, React.createElement(Plus, { size: 13 }), "追加")),
-        React.createElement("label", { style: { display: "block", fontSize: 12, fontWeight: 700, color: COLORS.inkSoft, margin: "0 0 6px" } }, `写真(最大${MAX_PHOTOS}枚・文字が読める画質で保存)`),
-        React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 } },
+        React.createElement("label", { style: { display: "block", fontSize: 12, fontWeight: 700, color: COLORS.inkSoft, margin: "0 0 6px" } }, `写真(最大${MAX_PHOTOS}枚・文字が読める画質で保存・長押しでドラッグして並び替え)`),
+        React.createElement("div", {
+                ref: gridRef,
+                onTouchMove: handleGridTouchMove,
+                onTouchEnd: handleGridTouchEnd,
+                onTouchCancel: handleGridTouchEnd,
+                style: { display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 },
+            },
             photos.map((p, i) => React.createElement(PhotoThumb, {
-                key: i, url: p.thumb,
+                key: i, url: p.thumb, index: i, dragging: dragIndex === i,
+                dragProps: { "data-photo-index": i, onTouchStart: (e) => handleThumbTouchStart(e, i) },
+                onView: null,
                 onRemove: () => setPhotos((prev) => prev.filter((_, idx) => idx !== i)),
                 onRotate: async () => {
                     const [full, thumb] = await Promise.all([rotateDataUrl90(p.full), rotateDataUrl90(p.thumb)]);
                     setPhotos((prev) => prev.map((ph, idx) => idx === i ? { full, thumb } : ph));
                 },
-                onMoveLeft: i > 0 ? () => setPhotos((prev) => {
-                    const next = [...prev];
-                    [next[i - 1], next[i]] = [next[i], next[i - 1]];
-                    return next;
-                }) : null,
-                onMoveRight: i < photos.length - 1 ? () => setPhotos((prev) => {
-                    const next = [...prev];
-                    [next[i + 1], next[i]] = [next[i], next[i + 1]];
-                    return next;
-                }) : null,
             })),
             photos.length < MAX_PHOTOS && React.createElement(React.Fragment, null,
                 React.createElement("label", { style: {
@@ -377,6 +427,17 @@ function PrintForm({ initial, printPeople, onSave, onCancel, onAddPerson, saveEr
 function PhotoViewer({ photos, startIndex, onClose }) {
     const scrollRef = useRef(null);
     const [currentIndex, setCurrentIndex] = useState(startIndex);
+    // Zoom is a plain button toggle, not a touch gesture — every custom
+    // touch-gesture attempt at this (pinch, then double-tap+drag) broke in
+    // ways that only showed up once the app was added to the iOS home
+    // screen, which isn't something that could be tested directly from
+    // here. A button just calls setState on click, and panning around
+    // once zoomed is the browser's own native scrolling (the same
+    // mechanism the swipe-between-photos strip below already uses
+    // without issues) — nothing here is intercepting or fighting over
+    // touch events, so there's much less room for this platform-specific
+    // kind of breakage.
+    const [zoomed, setZoomed] = useState(false);
     useEffect(() => {
         // Jump straight to the tapped photo — scrollIntoView with an
         // instant (not smooth) behavior avoids a distracting animated
@@ -394,18 +455,29 @@ function PhotoViewer({ photos, startIndex, onClose }) {
     const handleScroll = () => {
         const el = scrollRef.current;
         if (el && el.clientWidth > 0) {
-            setCurrentIndex(Math.round(el.scrollLeft / el.clientWidth));
+            const next = Math.round(el.scrollLeft / el.clientWidth);
+            if (next !== currentIndex) {
+                setCurrentIndex(next);
+                setZoomed(false); // don't carry a zoomed-in state over to the next photo
+            }
         }
     };
     return React.createElement("div", { style: {
             position: "fixed", inset: 0, background: "rgba(20,22,18,0.94)", zIndex: 100,
         } },
         React.createElement("button", { onClick: onClose, "aria-label": "閉じる", style: {
-                position: "absolute", top: "calc(12px + env(safe-area-inset-top, 0px))", right: 12, zIndex: 1,
+                position: "absolute", top: "calc(12px + env(safe-area-inset-top, 0px))", right: 12, zIndex: 2,
                 width: 36, height: 36, borderRadius: 999, border: "none",
                 background: "rgba(255,255,255,0.16)", color: "#fff",
                 display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
             } }, React.createElement(X, { size: 18 })),
+        React.createElement("button", { onClick: () => setZoomed((z) => !z), "aria-label": zoomed ? "縮小" : "拡大", style: {
+                position: "absolute", top: "calc(12px + env(safe-area-inset-top, 0px))", right: 60, zIndex: 2,
+                height: 36, padding: "0 14px", borderRadius: 999, border: "none",
+                background: zoomed ? "#fff" : "rgba(255,255,255,0.16)", color: zoomed ? COLORS.ink : "#fff",
+                display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+                fontSize: 12.5, fontWeight: 700,
+            } }, zoomed ? "縮小" : "拡大"),
         // A plain horizontally-scrolling, scroll-snapped strip — swiping
         // (or scrolling two-finger on a trackpad) moves to the next/
         // previous photo natively, no custom gesture code needed.
@@ -413,20 +485,24 @@ function PhotoViewer({ photos, startIndex, onClose }) {
                 display: "flex",
                 width: "100%",
                 height: "100%",
-                overflowX: "auto",
-                scrollSnapType: "x mandatory",
+                overflowX: zoomed ? "hidden" : "auto",
+                scrollSnapType: zoomed ? "none" : "x mandatory",
                 WebkitOverflowScrolling: "touch",
             } },
             photos.map((url, i) => React.createElement("div", { key: i, style: {
                     flex: "0 0 100%",
                     scrollSnapAlign: "start",
                     display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
+                    alignItems: (zoomed && i === currentIndex) ? "flex-start" : "center",
+                    justifyContent: (zoomed && i === currentIndex) ? "flex-start" : "center",
                     padding: 16,
                     boxSizing: "border-box",
+                    overflow: (zoomed && i === currentIndex) ? "auto" : "hidden",
+                    WebkitOverflowScrolling: "touch",
                 } },
-                React.createElement("img", { key: i, src: url, alt: "", style: { maxWidth: "100%", maxHeight: "100%", borderRadius: 8 } })))),
+                React.createElement("img", { key: i, src: url, alt: "", style: (zoomed && i === currentIndex) ? {
+                        width: "220%", maxWidth: "none", height: "auto", borderRadius: 8,
+                    } : { maxWidth: "100%", maxHeight: "100%", borderRadius: 8 } })))),
         photos.length > 1 && React.createElement("div", { style: {
                 position: "absolute", bottom: "calc(16px + env(safe-area-inset-bottom, 0px))", left: 0, right: 0,
                 textAlign: "center", color: "rgba(255,255,255,0.7)", fontSize: 12.5, fontWeight: 700,
