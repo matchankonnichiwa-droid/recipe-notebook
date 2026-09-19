@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { FiPlus as Plus, FiX as X, FiCamera as Camera, FiFileText as FileText, FiCheck as Check, FiChevronLeft as ChevronLeft, FiEdit2 as Edit2, FiSearch as Search, FiRotateCw as RotateCw } from "react-icons/fi";
+import { PhotoPositionEditor } from "./photo-editor.js";
 
 // This chunk is loaded on demand (only when the プリント tab is opened) —
 // see LazyPrintsView in app.js. Purpose: photograph paper documents (school
@@ -40,6 +41,25 @@ const SHADOW = { soft: "0 2px 12px rgba(65,55,45,0.05)", lifted: "0 5px 24px rgb
 // forced the browser to decode several large images at once on every
 // re-render, which is what made the whole screen (including the back
 // button) stop responding after adding a few photos.
+// Derives a small preview thumb from an already-cropped print-quality
+// photo (see handleCropConfirm below), rather than re-cropping — this is
+// the same lightweight-thumb idea fileToDocumentPhoto used, just applied
+// to a data URL that's already been through the crop step.
+function recompressForThumb(dataUrl) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+            const scale = Math.min(1, 160 / Math.max(img.naturalWidth, img.naturalHeight));
+            const canvas = document.createElement("canvas");
+            canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+            canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+            canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+            resolve(canvas.toDataURL("image/jpeg", 0.6));
+        };
+        img.onerror = reject;
+        img.src = dataUrl;
+    });
+}
 function fileToDocumentPhoto(file) {
     return new Promise((resolve, reject) => {
         const img = new Image();
@@ -227,7 +247,6 @@ function PrintForm({ initial, printPeople, onSave, onCancel, onAddPerson, saveEr
     const [newPersonDraft, setNewPersonDraft] = useState("");
     const [addingPerson, setAddingPerson] = useState(false);
     const [saving, setSaving] = useState(false);
-    const [processingCount, setProcessingCount] = useState(0);
     // Drag-to-reorder for the photo grid below. dragIndex is which photo
     // is currently being dragged (for the faded-out styling); didDragRef
     // tracks whether the touch actually moved enough to count as a drag
@@ -283,28 +302,32 @@ function PrintForm({ initial, printPeople, onSave, onCancel, onAddPerson, saveEr
     const togglePerson = (name) => {
         setPersonTags((prev) => prev.includes(name) ? prev.filter((p) => p !== name) : [...prev, name]);
     };
-    const handleFiles = async (fileList) => {
-        const files = Array.from(fileList || []).slice(0, MAX_PHOTOS - photos.length);
-        if (files.length === 0)
-            return;
-        // Processed one at a time (not all via Promise.all at once), with a
-        // brief yield between each, rather than compressing every selected
-        // photo back-to-back in one long synchronous burst — several large
-        // photos processed together like that was what made the screen
-        // (including the back button) stop responding until it finished.
-        setProcessingCount(files.length);
-        for (const file of files) {
-            try {
-                const pair = await fileToDocumentPhoto(file);
-                setPhotos((prev) => [...prev, pair]);
-            }
-            catch {
-                // skip a photo that failed to load rather than aborting the
-                // whole batch
-            }
-            setProcessingCount((n) => n - 1);
-            await new Promise((r) => setTimeout(r, 0));
+    // Selected files go through the same crop/position editor recipe
+    // photos use (imported from photo-editor.js) before being added —
+    // one at a time, queued, so picking several photos at once still
+    // shows the crop step for each in turn rather than skipping it.
+    const [cropQueue, setCropQueue] = useState([]);
+    const handleFiles = (fileList) => {
+        const files = Array.from(fileList || []).slice(0, MAX_PHOTOS - photos.length - cropQueue.length);
+        if (files.length > 0)
+            setCropQueue((prev) => [...prev, ...files]);
+    };
+    const handleCropConfirm = async (croppedDataUrl) => {
+        // The crop editor already returns a compressed, cropped image at
+        // print-quality resolution (see outputWidth below) — just derive
+        // a smaller thumb from that same cropped result for the form/list
+        // rendering, rather than re-cropping.
+        try {
+            const thumb = await recompressForThumb(croppedDataUrl);
+            setPhotos((prev) => [...prev, { full: croppedDataUrl, thumb }]);
         }
+        catch {
+            setPhotos((prev) => [...prev, { full: croppedDataUrl, thumb: croppedDataUrl }]);
+        }
+        setCropQueue((prev) => prev.slice(1));
+    };
+    const handleCropSkip = () => {
+        setCropQueue((prev) => prev.slice(1));
     };
     const [saveTimedOut, setSaveTimedOut] = useState(false);
     const handleSave = async () => {
@@ -416,14 +439,118 @@ function PrintForm({ initial, printPeople, onSave, onCancel, onAddPerson, saveEr
                             handleFiles(e.target.files);
                             e.target.value = "";
                         } })))),
-        processingCount > 0 && React.createElement("p", { style: { fontSize: 12, color: COLORS.inkSoft, marginBottom: 16 } }, `処理中… 残り${processingCount}枚`),
-        processingCount === 0 && React.createElement("div", { style: { marginBottom: 16 } }),
+        cropQueue.length > 0 && React.createElement("p", { style: { fontSize: 12, color: COLORS.inkSoft, marginBottom: 16 } }, `\u3042\u3068${cropQueue.length}\u679A\u3001\u56F2\u3080\u7BC4\u56F2\u3092\u9078\u3093\u3067\u304F\u3060\u3055\u3044`),
+        cropQueue.length === 0 && React.createElement("div", { style: { marginBottom: 16 } }),
         React.createElement("button", { onClick: handleSave, disabled: saving, style: {
                 width: "100%", background: COLORS.accent, color: "#fff", border: "none", borderRadius: 12,
                 padding: "14px 0", fontWeight: 700, fontSize: 15, cursor: saving ? "default" : "pointer", opacity: saving ? 0.6 : 1,
-            } }, saving ? "保存中…" : "保存する"));
+            } }, saving ? "保存中…" : "保存する"),
+        cropQueue.length > 0 && React.createElement(PhotoPositionEditor, {
+            file: cropQueue[0],
+            outputWidth: 1400,
+            onCancel: handleCropSkip,
+            onConfirm: handleCropConfirm,
+        }));
 }
 
+// Pinch-to-zoom, implemented with the addEventListener(..., { passive:
+// false }) pattern rather than React's onTouch* props — React's own touch
+// props attach as passive listeners, so calling preventDefault() inside
+// them silently does nothing, which is what broke earlier pinch attempts
+// here. Exposes toggleZoom via ref so the fallback "拡大" button (kept
+// alongside this, in case pinch still doesn't hold up in a home-screen-
+// installed PWA) drives the exact same zoom/pan state pinching does,
+// rather than being a second, disconnected zoom mechanism.
+const PinchZoomImage = React.forwardRef(function PinchZoomImage({ src, active, onZoomChange }, ref) {
+    const [zoom, setZoom] = useState(1);
+    const [pan, setPan] = useState({ x: 0, y: 0 });
+    const wrapRef = useRef(null);
+    const pinchState = useRef(null); // { dist, x, y } from the previous pinch move
+    const dragState = useRef(null); // single-finger pan, only once zoomed
+    React.useImperativeHandle(ref, () => ({
+        toggleZoom: () => {
+            setZoom((z) => {
+                const next = z > 1 ? 1 : 2.5;
+                if (next === 1)
+                    setPan({ x: 0, y: 0 });
+                return next;
+            });
+        },
+        reset: () => { setZoom(1); setPan({ x: 0, y: 0 }); },
+    }));
+    useEffect(() => { onZoomChange?.(zoom); }, [zoom]);
+    useEffect(() => {
+        const el = wrapRef.current;
+        if (!el || !active)
+            return;
+        const getMidpoint = (e, rect) => {
+            const [t1, t2] = e.touches;
+            return {
+                dist: Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY),
+                x: (t1.clientX + t2.clientX) / 2 - rect.left,
+                y: (t1.clientY + t2.clientY) / 2 - rect.top,
+            };
+        };
+        const onTouchStart = (e) => {
+            if (e.touches.length === 2) {
+                pinchState.current = getMidpoint(e, el.getBoundingClientRect());
+            }
+            else if (e.touches.length === 1 && zoom > 1) {
+                const t = e.touches[0];
+                dragState.current = { startX: t.clientX, startY: t.clientY, startPanX: pan.x, startPanY: pan.y };
+            }
+        };
+        const onTouchMove = (e) => {
+            if (e.touches.length === 2 && pinchState.current) {
+                e.preventDefault();
+                const current = getMidpoint(e, el.getBoundingClientRect());
+                const scaleDelta = current.dist / pinchState.current.dist;
+                setZoom((z) => {
+                    const nextZoom = Math.min(4, Math.max(1, z * scaleDelta));
+                    setPan((p) => ({
+                        x: current.x - (current.x - p.x) * (nextZoom / z),
+                        y: current.y - (current.y - p.y) * (nextZoom / z),
+                    }));
+                    return nextZoom;
+                });
+                pinchState.current = current;
+            }
+            else if (e.touches.length === 1 && dragState.current) {
+                e.preventDefault();
+                const t = e.touches[0];
+                setPan({
+                    x: dragState.current.startPanX + (t.clientX - dragState.current.startX),
+                    y: dragState.current.startPanY + (t.clientY - dragState.current.startY),
+                });
+            }
+        };
+        const onTouchEnd = (e) => {
+            if (e.touches.length < 2)
+                pinchState.current = null;
+            if (e.touches.length < 1)
+                dragState.current = null;
+        };
+        el.addEventListener("touchstart", onTouchStart, { passive: false });
+        el.addEventListener("touchmove", onTouchMove, { passive: false });
+        el.addEventListener("touchend", onTouchEnd, { passive: false });
+        el.addEventListener("touchcancel", onTouchEnd, { passive: false });
+        return () => {
+            el.removeEventListener("touchstart", onTouchStart);
+            el.removeEventListener("touchmove", onTouchMove);
+            el.removeEventListener("touchend", onTouchEnd);
+            el.removeEventListener("touchcancel", onTouchEnd);
+        };
+    }, [active, zoom, pan]);
+    return React.createElement("div", {
+            ref: wrapRef,
+            style: { width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", touchAction: zoom > 1 ? "none" : "pan-x" },
+        },
+        React.createElement("img", { src: src, alt: "", draggable: false, style: {
+                maxWidth: "100%", maxHeight: "100%", borderRadius: 8,
+                transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                transition: (pinchState.current || dragState.current) ? "none" : "transform 0.2s",
+            } }));
+});
 function PhotoViewer({ photos, startIndex, onClose }) {
     const scrollRef = useRef(null);
     const [currentIndex, setCurrentIndex] = useState(startIndex);
@@ -437,7 +564,13 @@ function PhotoViewer({ photos, startIndex, onClose }) {
     // without issues) — nothing here is intercepting or fighting over
     // touch events, so there's much less room for this platform-specific
     // kind of breakage.
-    const [zoomed, setZoomed] = useState(false);
+    // Zoom now happens two ways: pinch (handled inside PinchZoomImage,
+    // per-photo) and this "拡大" button, kept as a fallback in case pinch
+    // still doesn't hold up once the app is installed to the home screen
+    // — both drive the exact same zoom/pan state via imageRefs below,
+    // rather than being two separate, disconnected zoom mechanisms.
+    const [isZoomed, setIsZoomed] = useState(false);
+    const imageRefs = useRef([]);
     useEffect(() => {
         // Jump straight to the tapped photo — scrollIntoView with an
         // instant (not smooth) behavior avoids a distracting animated
@@ -457,8 +590,9 @@ function PhotoViewer({ photos, startIndex, onClose }) {
         if (el && el.clientWidth > 0) {
             const next = Math.round(el.scrollLeft / el.clientWidth);
             if (next !== currentIndex) {
+                imageRefs.current[currentIndex]?.reset(); // don't carry a zoomed-in state over to the next photo
                 setCurrentIndex(next);
-                setZoomed(false); // don't carry a zoomed-in state over to the next photo
+                setIsZoomed(false);
             }
         }
     };
@@ -471,13 +605,13 @@ function PhotoViewer({ photos, startIndex, onClose }) {
                 background: "rgba(255,255,255,0.16)", color: "#fff",
                 display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
             } }, React.createElement(X, { size: 18 })),
-        React.createElement("button", { onClick: () => setZoomed((z) => !z), "aria-label": zoomed ? "縮小" : "拡大", style: {
+        React.createElement("button", { onClick: () => { imageRefs.current[currentIndex]?.toggleZoom(); setIsZoomed((z) => !z); }, "aria-label": isZoomed ? "縮小" : "拡大", style: {
                 position: "absolute", top: "calc(12px + env(safe-area-inset-top, 0px))", right: 60, zIndex: 2,
                 height: 36, padding: "0 14px", borderRadius: 999, border: "none",
-                background: zoomed ? "#fff" : "rgba(255,255,255,0.16)", color: zoomed ? COLORS.ink : "#fff",
+                background: isZoomed ? "#fff" : "rgba(255,255,255,0.16)", color: isZoomed ? COLORS.ink : "#fff",
                 display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
                 fontSize: 12.5, fontWeight: 700,
-            } }, zoomed ? "縮小" : "拡大"),
+            } }, isZoomed ? "縮小" : "拡大"),
         // A plain horizontally-scrolling, scroll-snapped strip — swiping
         // (or scrolling two-finger on a trackpad) moves to the next/
         // previous photo natively, no custom gesture code needed.
@@ -485,24 +619,24 @@ function PhotoViewer({ photos, startIndex, onClose }) {
                 display: "flex",
                 width: "100%",
                 height: "100%",
-                overflowX: zoomed ? "hidden" : "auto",
-                scrollSnapType: zoomed ? "none" : "x mandatory",
+                overflowX: isZoomed ? "hidden" : "auto",
+                scrollSnapType: isZoomed ? "none" : "x mandatory",
                 WebkitOverflowScrolling: "touch",
             } },
             photos.map((url, i) => React.createElement("div", { key: i, style: {
                     flex: "0 0 100%",
                     scrollSnapAlign: "start",
                     display: "flex",
-                    alignItems: (zoomed && i === currentIndex) ? "flex-start" : "center",
-                    justifyContent: (zoomed && i === currentIndex) ? "flex-start" : "center",
+                    alignItems: "center",
+                    justifyContent: "center",
                     padding: 16,
                     boxSizing: "border-box",
-                    overflow: (zoomed && i === currentIndex) ? "auto" : "hidden",
-                    WebkitOverflowScrolling: "touch",
                 } },
-                React.createElement("img", { key: i, src: url, alt: "", style: (zoomed && i === currentIndex) ? {
-                        width: "220%", maxWidth: "none", height: "auto", borderRadius: 8,
-                    } : { maxWidth: "100%", maxHeight: "100%", borderRadius: 8 } })))),
+                React.createElement(PinchZoomImage, {
+                    key: i, src: url, active: i === currentIndex,
+                    ref: (r) => { imageRefs.current[i] = r; },
+                    onZoomChange: (z) => { if (i === currentIndex) setIsZoomed(z > 1); },
+                })))),
         photos.length > 1 && React.createElement("div", { style: {
                 position: "absolute", bottom: "calc(16px + env(safe-area-inset-bottom, 0px))", left: 0, right: 0,
                 textAlign: "center", color: "rgba(255,255,255,0.7)", fontSize: 12.5, fontWeight: 700,

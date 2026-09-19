@@ -26,7 +26,7 @@ const COLORS = {
     chipBg: "#F4F0E8",
 };
 // photo-crop tool) rather than panning/zooming inside a fixed window.
-export function PhotoPositionEditor({ file, source, onCancel, onConfirm }) {
+export function PhotoPositionEditor({ file, source, onCancel, onConfirm, outputWidth }) {
     const [imgUrl, setImgUrl] = useState(null);
     const [natural, setNatural] = useState(null); // { w, h }
     const [dispSize, setDispSize] = useState(null); // { w, h } — rendered image size
@@ -131,7 +131,7 @@ export function PhotoPositionEditor({ file, source, onCancel, onConfirm }) {
         // gets re-fetched on every app launch. A recipe thumbnail doesn't
         // need to be much bigger than it's ever displayed at, so this
         // trades a little image quality for a much lighter app.
-        const outW = 450, outH = Math.round(outW * (cropH / cropW));
+        const outW = outputWidth || 450, outH = Math.round(outW * (cropH / cropW));
         const canvas = document.createElement("canvas");
         canvas.width = outW;
         canvas.height = outH;
