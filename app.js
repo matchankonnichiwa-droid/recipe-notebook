@@ -2243,8 +2243,18 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
                 uref(`recipe-index/${recipe.id}`).set(buildRecipeIndexEntry(recipe)),
             ]);
         }
-        catch {
+        catch (e) {
+            // This used to just show the error message and swallow the
+            // failure — meaning every caller (saveRecipe, the URL/screenshot
+            // import flows, the edit-save flow) went on to act as if the
+            // write had actually succeeded: navigating to a recipe that was
+            // never actually saved, with no way to tell it hadn't worked
+            // beyond a "保存に失敗しました" that a slow-loading detail screen
+            // could scroll right past. Re-throwing lets every caller's own
+            // error handling (or a new one, where one didn't exist yet)
+            // actually react to the failure instead of pressing on.
             setSaveError("保存に失敗しました(通信環境を確認してください)。");
+            throw e;
         }
     }, []);
     const removeRecipeRemote = useCallback(async (id) => {
@@ -2624,7 +2634,14 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
     const handleSaveDraft = async () => {
         if (!draft)
             return;
-        await saveRecipe(draft);
+        try {
+            await saveRecipe(draft);
+        }
+        catch {
+            // Keep the draft on screen rather than clearing it — the error
+            // message is already shown via setSaveError.
+            return;
+        }
         resetAddForm();
         setView("list");
     };
@@ -2656,7 +2673,15 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
         if (!editDraft)
             return;
         const cleaned = { ...editDraft, steps: cleanupSteps(editDraft.steps) };
-        await writeRecipe(cleaned);
+        try {
+            await writeRecipe(cleaned);
+        }
+        catch {
+            // Stay on the edit screen with the draft intact rather than
+            // navigating away — writeRecipe already surfaced the error
+            // message via setSaveError above.
+            return;
+        }
         setEditDraft(null);
         setView("detail");
         setConfirmDelete(false);
