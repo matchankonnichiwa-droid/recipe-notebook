@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createRoot } from "react-dom/client";
-import { FiPlus as Plus, FiSearch as Search, FiInstagram as Instagram, FiLink2 as Link2, FiTrash2 as Trash2, FiChevronLeft as ChevronLeft, FiChevronDown as ChevronDown, FiLoader as Loader2, FiClipboard as ClipboardPaste, FiX as X, FiCheck as Check, FiAlertCircle as AlertCircle, FiBookOpen as BookOpen, FiCamera as Camera, FiMinus as Minus, FiRotateCcw as RotateCcw, FiRepeat as Repeat, FiEdit2 as Edit2, FiSettings as Settings, FiBookmark as Bookmark, FiGrid as GridIcon, FiList as ListIcon, FiCalendar as CalendarIcon, FiArrowUp as ArrowUp, FiFileText as FileText, FiMoreHorizontal as MoreHorizontal, } from "react-icons/fi";
+import { FiPlus as Plus, FiSearch as Search, FiInstagram as Instagram, FiLink2 as Link2, FiTrash2 as Trash2, FiChevronLeft as ChevronLeft, FiChevronDown as ChevronDown, FiLoader as Loader2, FiClipboard as ClipboardPaste, FiX as X, FiCheck as Check, FiAlertCircle as AlertCircle, FiBookOpen as BookOpen, FiCamera as Camera, FiMinus as Minus, FiRotateCcw as RotateCcw, FiEdit2 as Edit2, FiSettings as Settings, FiBookmark as Bookmark, FiGrid as GridIcon, FiList as ListIcon, FiCalendar as CalendarIcon, FiArrowUp as ArrowUp, } from "react-icons/fi";
 // tesseract.js is a large OCR library (WASM engine + language data) that's
 // only needed for the "screenshot" recipe-import path. Importing it
 // statically here would force every app launch to download and parse it
@@ -30,94 +30,16 @@ const rtdb = window.firebase.database();
 function uref(path) {
     return rtdb.ref(path);
 }
-// Recipe photos are embedded directly as base64 data URLs inside the
-// recipe's Realtime Database record (kept simple — no Firebase Storage,
-// which needs the paid Blaze plan). That means every photo rides along on
-// every read of the recipes list, so keeping each photo genuinely small is
-// what keeps the app fast as the recipe count grows — see the 600px/0.6
-// output in PhotoPositionEditor's handleConfirm, and this helper, which
-// re-compresses a photo already stored at a larger size down to that same
-// target (used by the one-time "写真を軽量化する" cleanup in Settings).
-function recompressDataUrl(dataUrl, maxDimension, quality) {
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => {
-            const scale = Math.min(1, maxDimension / Math.max(img.naturalWidth, img.naturalHeight));
-            const canvas = document.createElement("canvas");
-            canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
-            canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
-            const ctx = canvas.getContext("2d");
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            resolve(canvas.toDataURL("image/jpeg", quality));
-        };
-        img.onerror = reject;
-        img.src = dataUrl;
-    });
-}
-// Local cache for instant first paint (showing last-seen data immediately
-// while the Firebase listener connects, and so the app still shows
-// something if the network is briefly unavailable) — backed by IndexedDB
-// rather than localStorage. localStorage is synchronous and blocks the
-// main thread on every read/write, and is capped around 5–10MB total,
-// which recipes-with-photos data was creeping toward as the collection
-// grew; IndexedDB reads/writes off the main thread and has no practical
-// size ceiling for data at this scale. Falls back to localStorage if
-// IndexedDB isn't available (e.g. private browsing in some browsers).
-const DB_NAME = "recipe-notebook-cache";
-const DB_STORE = "kv";
-function openCacheDb() {
-    return new Promise((resolve, reject) => {
-        if (!window.indexedDB) {
-            reject(new Error("indexedDB unavailable"));
-            return;
-        }
-        const req = indexedDB.open(DB_NAME, 1);
-        req.onupgradeneeded = () => {
-            if (!req.result.objectStoreNames.contains(DB_STORE))
-                req.result.createObjectStore(DB_STORE);
-        };
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-    });
-}
+// localStorage is kept as a fallback cache only (used for instant first
+// paint before the Firebase listener responds, and so the app still shows
+// something if the network is briefly unavailable).
 const storage = {
     async get(key) {
-        try {
-            const db = await openCacheDb();
-            const value = await new Promise((resolve, reject) => {
-                const tx = db.transaction(DB_STORE, "readonly");
-                const req = tx.objectStore(DB_STORE).get(key);
-                req.onsuccess = () => resolve(req.result);
-                req.onerror = () => reject(req.error);
-            });
-            return value === undefined ? null : { key, value };
-        }
-        catch {
-            // IndexedDB unavailable or failed — fall back to localStorage
-            // so caching still works, just without its main-thread-free
-            // benefit.
-            const raw = localStorage.getItem(key);
-            return raw === null ? null : { key, value: raw };
-        }
+        const raw = localStorage.getItem(key);
+        return raw === null ? null : { key, value: raw };
     },
     async set(key, value) {
-        try {
-            const db = await openCacheDb();
-            await new Promise((resolve, reject) => {
-                const tx = db.transaction(DB_STORE, "readwrite");
-                tx.objectStore(DB_STORE).put(value, key);
-                tx.oncomplete = resolve;
-                tx.onerror = () => reject(tx.error);
-            });
-        }
-        catch {
-            try {
-                localStorage.setItem(key, value);
-            }
-            catch {
-                // best-effort cache — a failure here shouldn't break anything
-            }
-        }
+        localStorage.setItem(key, value);
         return { key, value };
     },
 };
@@ -190,7 +112,7 @@ function splitNameGroup(name) {
     // latter has no "name" to speak of, but the person still wants those
     // ingredients visually clustered together rather than shown flat.
     const isBareMarker = /^[A-Za-zＡ-Ｚａ-ｚ]{1,2}$|^[①-⑳]$|^\d{1,2}$/.test(label);
-    if (matchesKnownGroup(label) || isBareMarker) {
+    if (KNOWN_GROUP_HEADERS.includes(label) || isBareMarker) {
         return { base: m[1].trim(), group: label };
     }
     return { base: name || "", group: null };
@@ -210,52 +132,20 @@ function useGoogleFonts() {
         return () => links.forEach((l) => l.remove());
     }, []);
 }
-// Design tokens per the redesign spec (北欧×暮らし×大人かわいい). Existing
-// key names (paper, ink, sage, plum, etc.) are kept as-is so every
-// component that already references COLORS.xxx keeps working unchanged —
-// only the underlying values move to the new palette. A few new keys are
-// added for elements the spec calls out that didn't have a color before
-// (cream, terracotta, dangerSoft, sageDark, inkLight).
 const COLORS = {
-    paper: "#FAF8F3",
+    paper: "#F7F6F2",
     paperCard: "#FFFFFF",
-    soft: "#F4F0E8",
-    ink: "#383631",
-    inkSoft: "#777269",
-    inkLight: "#A29D94",
-    mustard: "#C9856B",
-    sage: "#7F947C",
-    sageDark: "#637460",
-    sageSoft: "#E7EEE5",
-    plum: "#C66C66",
-    dangerSoft: "#F8E8E6",
-    cream: "#F3EBDD",
-    terracotta: "#C9856B",
-    terracottaLight: "#F5E7E0",
-    line: "#EAE5DC",
-    accent: "#7F947C",
-    accentSoft: "#E7EEE5",
-    chipBg: "#F4F0E8",
-    // Feature accent colors — a distinct color per section (recipe/todo/
-    // shopping/prints), layered on top of the shared sage/ink/paper base
-    // rather than replacing it, so things like buttons, borders, and text
-    // stay on the established sage system while nav icons, the home
-    // dashboard's shortcut cards, and section headers use these to make
-    // each area visually distinct at a glance.
-    featureRecipe: "#D98E72",
-    featureRecipeSoft: "#F6E4DA",
-    featureTodo: "#6FA383",
-    featureTodoSoft: "#E1EEE6",
-    featureShopping: "#5B8FB0",
-    featureShoppingSoft: "#DFEAF1",
-    featurePrints: "#9B7FB5",
-    featurePrintsSoft: "#EBE3F2",
+    ink: "#20231F",
+    inkSoft: "#7E827C",
+    mustard: "#B18A57",
+    sage: "#6F806F",
+    sageSoft: "#E8EDE7",
+    plum: "#B86A68",
+    line: "#E7E5DF",
+    accent: "#6F806F",
+    accentSoft: "#E8EDE7",
+    chipBg: "#EEEDE8",
 };
-// Shared radius/shadow tokens per the redesign spec — pull from these
-// instead of hardcoding numbers so the whole app stays visually
-// consistent as more screens get restyled.
-const RADIUS = { card: 22, cardSmall: 17, button: 16, input: 15, chip: 999, image: 20 };
-const SHADOW = { soft: "0 2px 12px rgba(65,55,45,0.05)", lifted: "0 5px 24px rgba(65,55,45,0.08)" };
 function detectSource(url) {
     if (!url)
         return "other";
@@ -321,66 +211,27 @@ const MEAT_ICONS = { 鶏肉: "🐔", 豚肉: "🐖", 牛肉: "🐄", その他: 
 const MEAT_TYPES = ["鶏肉", "豚肉", "牛肉", "ひき肉", "その他"];
 const NOODLE_TYPES = ["うどん", "そば", "ラーメン", "パスタ", "その他"];
 const VEG_TYPES = ["サラダ", "炒め物", "和え物・おひたし", "煮物", "漬け物", "その他"];
-const SOUP_TYPES = ["スープ", "みそ汁", "鍋", "その他"];
-function inferNoodleType(title) {
-    const t = title || "";
-    if (/うどん/.test(t))
-        return "うどん";
-    if (/ラーメン/.test(t))
-        return "ラーメン";
-    if (/そば/.test(t))
-        return "そば";
-    if (/パスタ|スパゲ/.test(t))
-        return "パスタ";
-    return "その他";
-}
-function inferMeatType(names) {
-    if (/鶏肉|鶏|鳥/.test(names))
-        return "鶏肉";
-    if (/豚肉|豚/.test(names))
-        return "豚肉";
-    if (/牛肉|牛/.test(names))
-        return "牛肉";
-    if (/ひき肉|挽き肉|合いびき/.test(names))
-        return "ひき肉";
-    return "その他";
-}
-function inferVegType(title) {
-    const t = title || "";
-    if (/サラダ/.test(t))
-        return "サラダ";
-    if (/炒め/.test(t))
-        return "炒め物";
-    if (/和え|おひたし/.test(t))
-        return "和え物・おひたし";
-    if (/煮/.test(t))
-        return "煮物";
-    if (/漬け/.test(t))
-        return "漬け物";
-    return "その他";
-}
-function inferSoupType(title) {
-    const t = title || "";
-    if (/みそ汁|味噌汁/.test(t))
-        return "みそ汁";
-    if (/鍋/.test(t))
-        return "鍋";
-    if (/スープ|汁|シチュー/.test(t))
-        return "スープ";
-    return "その他";
-}
 function inferDishCategory(title, ingredients) {
     const t = title || "";
-    const base = { meatType: null, noodleType: null, vegType: null, soupType: null };
+    const base = { meatType: null, noodleType: null, vegType: null };
     if (/麺|パスタ|うどん|そば|ラーメン|焼きそば/.test(t)) {
-        return { ...base, dishCategory: "麺類", noodleType: inferNoodleType(t) };
+        let noodleType = "その他";
+        if (/うどん/.test(t))
+            noodleType = "うどん";
+        else if (/ラーメン/.test(t))
+            noodleType = "ラーメン";
+        else if (/そば/.test(t))
+            noodleType = "そば";
+        else if (/パスタ|スパゲ/.test(t))
+            noodleType = "パスタ";
+        return { ...base, dishCategory: "麺類", noodleType };
     }
     if (/パン|食パン|ベーグル|フォカッチャ|バゲット|ロール(?!キャベツ)/.test(t))
         return { ...base, dishCategory: "パン" };
     if (/ご飯|ごはん|丼|オムライス|チャーハン|カレー|寿司|リゾット|おにぎり/.test(t))
         return { ...base, dishCategory: "ご飯もの" };
     if (/スープ|汁|鍋|シチュー/.test(t))
-        return { ...base, dishCategory: "スープ・鍋", soupType: inferSoupType(t) };
+        return { ...base, dishCategory: "スープ・鍋" };
     if (/ケーキ|クッキー|スイーツ|デザート|プリン|アイス|タルト|マフィン/.test(t))
         return { ...base, dishCategory: "デザート" };
     const names = (ingredients || []).map((i) => i.name || "").join(" ");
@@ -398,7 +249,18 @@ function inferDishCategory(title, ingredients) {
     if (/魚|えび|海老|いか|イカ|たこ|タコ|貝|鮭|さけ|まぐろ|ツナ|しらす/.test(names))
         return { ...base, dishCategory: "魚介料理" };
     if (vegKeywords.test(names)) {
-        return { ...base, dishCategory: "野菜料理", vegType: inferVegType(t) };
+        let vegType = "その他";
+        if (/サラダ/.test(t))
+            vegType = "サラダ";
+        else if (/炒め/.test(t))
+            vegType = "炒め物";
+        else if (/和え|おひたし/.test(t))
+            vegType = "和え物・おひたし";
+        else if (/煮/.test(t))
+            vegType = "煮物";
+        else if (/漬け/.test(t))
+            vegType = "漬け物";
+        return { ...base, dishCategory: "野菜料理", vegType };
     }
     return { ...base, dishCategory: "その他" };
 }
@@ -411,32 +273,6 @@ const APPLIANCE_ICONS = {
     圧力鍋: "🫕",
     電子レンジ: "📡",
 };
-// The list/filter/meal-plan views only ever need a recipe's identity and
-// classification, not its full ingredients/steps/memo — this trims a
-// recipe down to just that (plus ingredient *names*, so searching by
-// ingredient from the list still works without needing amounts, groups,
-// or anything else that only matters once the recipe is actually open).
-// See writeRecipe for where this gets written alongside the full record.
-function buildRecipeIndexEntry(recipe) {
-    return {
-        id: recipe.id,
-        title: recipe.title || "",
-        imageUrl: recipe.imageUrl || "",
-        imageUrl2: recipe.imageUrl2 || "",
-        imageUrl3: recipe.imageUrl3 || "",
-        dishCategory: recipe.dishCategory || null,
-        meatType: recipe.meatType || null,
-        noodleType: recipe.noodleType || null,
-        vegType: recipe.vegType || null,
-        soupType: recipe.soupType || null,
-        appliance: recipe.appliance || null,
-        sourceType: recipe.sourceType || null,
-        favorite: !!recipe.favorite,
-        savedAt: recipe.savedAt || "",
-        tags: recipe.tags || [],
-        ingredientNames: (recipe.ingredients || []).map((i) => i.name).filter(Boolean),
-    };
-}
 // Detects which cooking appliance a recipe uses from its title/steps/memo,
 // so recipes can be filtered into an appliance tab (e.g. air fryer vs. Hot
 // Cook) separately from the dish-genre grouping.
@@ -460,57 +296,25 @@ function inferAppliance(text) {
 // Prefers Claude's own classification (it understands the whole recipe, not
 // just keyword matches) but falls back to the local heuristic if Claude
 // wasn't used or returned something outside our known categories.
-// Important: the sub-type fallbacks (meatType/noodleType/vegType) are
-// derived directly from the title/ingredients rather than gated on
-// heuristic.dishCategory matching the *final* dishCategory. Those can
-// legitimately disagree — e.g. a vegetable salad with canned tuna in it:
-// the keyword heuristic used for dishCategory prioritizes "seafood" the
-// moment it sees ツナ, so heuristic.dishCategory comes out 魚介料理 even
-// though the real dish (and Claude's own dishCategory judgment) is 野菜
-//料理. Gating the vegType fallback on that mismatched heuristic category
-// silently dropped it to "その他" instead of detecting "サラダ" from the
-// title, which is exactly the bug this direct derivation avoids.
-//
-// titleOnly also gets priority *over* Claude's own sub-type guess (not just
-// as a fallback when Claude's field is missing/invalid): Claude sometimes
-// returns a technically-valid-but-wrong value like vegType "その他" for a
-// dish whose title literally says "〜サラダ" — an explicit word in the
-// title is a stronger, more legible signal than the model's own category
-// judgment, so it should win rather than only being consulted when
-// Claude's field fails validation.
-function resolveClassification(structured, classifyText, ingredients, applianceText, usedClaude, titleOnly) {
+function resolveClassification(structured, classifyText, ingredients, applianceText, usedClaude) {
     const heuristic = inferDishCategory(classifyText, ingredients);
     const dishCategory = usedClaude && DISH_CATEGORIES.includes(structured?.dishCategory) ? structured.dishCategory : heuristic.dishCategory;
-    const names = (ingredients || []).map((i) => i.name || "").join(" ");
-    const title = titleOnly || "";
     let meatType = null;
     if (dishCategory === "肉料理") {
-        const titleMeat = inferMeatType(names);
-        meatType = titleMeat !== "その他" ? titleMeat
-            : (usedClaude && MEAT_TYPES.includes(structured?.meatType) ? structured.meatType : titleMeat);
+        meatType = usedClaude && MEAT_TYPES.includes(structured?.meatType) ? structured.meatType : (heuristic.dishCategory === "肉料理" ? heuristic.meatType : "その他");
     }
     let noodleType = null;
     if (dishCategory === "麺類") {
-        const titleNoodle = inferNoodleType(title);
-        noodleType = titleNoodle !== "その他" ? titleNoodle
-            : (usedClaude && NOODLE_TYPES.includes(structured?.noodleType) ? structured.noodleType : titleNoodle);
+        noodleType = usedClaude && NOODLE_TYPES.includes(structured?.noodleType) ? structured.noodleType : (heuristic.dishCategory === "麺類" ? heuristic.noodleType : "その他");
     }
     let vegType = null;
     if (dishCategory === "野菜料理") {
-        const titleVeg = inferVegType(title);
-        vegType = titleVeg !== "その他" ? titleVeg
-            : (usedClaude && VEG_TYPES.includes(structured?.vegType) ? structured.vegType : titleVeg);
-    }
-    let soupType = null;
-    if (dishCategory === "スープ・鍋") {
-        const titleSoup = inferSoupType(title);
-        soupType = titleSoup !== "その他" ? titleSoup
-            : (usedClaude && SOUP_TYPES.includes(structured?.soupType) ? structured.soupType : titleSoup);
+        vegType = usedClaude && VEG_TYPES.includes(structured?.vegType) ? structured.vegType : (heuristic.dishCategory === "野菜料理" ? heuristic.vegType : "その他");
     }
     const appliance = usedClaude
         ? (APPLIANCES.includes(structured?.appliance) ? structured.appliance : null)
         : inferAppliance(applianceText);
-    return { dishCategory, meatType, noodleType, vegType, soupType, appliance };
+    return { dishCategory, meatType, noodleType, vegType, appliance };
 }
 const CIRCLED_DIGITS = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳";
 const BULLET_CHARS = ["●", "・", "-", "*", "■", "◆", "〇", "○", "◎", "▽", "▼", "▲", "▶", "□", "☆"];
@@ -562,41 +366,16 @@ const KNOWN_GROUP_HEADERS = [
     "生地", "仕上げ", "つけだれ", "漬けだれ", "下ごしらえ", "ドレッシング", "あん", "具材",
     "合わせ調味料", "調味料", "合わせだれ", "煮汁", "つけ汁", "スープ", "衣液", "バッター液",
 ];
-// Recipe sites often name a sub-section with a specific prefix attached to a
-// generic category word, e.g. "ねぎ塩だれ" (ねぎ塩 + だれ), "ごまだれ",
-// "甘辛あん" — these aren't literally in KNOWN_GROUP_HEADERS above but should
-// still be recognized as group headers. Match by suffix instead, capped at a
-// short length so an ordinary sentence that happens to end in one of these
-// words isn't mistaken for a heading.
-const KNOWN_GROUP_SUFFIXES = ["だれ", "ダレ", "ソース", "あん", "アン", "スープ", "ペースト", "ドレッシング"];
-const MAX_GROUP_HEADER_LENGTH = 20;
-function matchesKnownGroup(label) {
-    if (KNOWN_GROUP_HEADERS.includes(label))
-        return true;
-    if (label.length > MAX_GROUP_HEADER_LENGTH)
-        return false;
-    return KNOWN_GROUP_SUFFIXES.some((suf) => label.length > suf.length && label.endsWith(suf));
-}
 // Recipe sites often prefix a group heading with a reference letter, e.g.
 // "（A）合わせ調味料" or "(A) 下味" — strip that before matching against the
 // whitelist above, so the letter itself isn't treated as part of the name.
 const GROUP_LETTER_PREFIX_RE = /^[（(]\s*[A-ZＡ-Ｚ0-9０-９]\s*[）)]\s*/;
-// SNS captions often wrap a whole heading in a decorative bracket pair, e.g.
-// "【ガーリックハニーマスタードソース】" or "「タレ」" — strip the outer
-// pair (only when it wraps the *entire* line) before matching.
-const GROUP_WRAPPER_RE = /^[【\[「『]\s*(.+?)\s*[】\]」』]$/;
-function stripGroupDecoration(line) {
-    let s = line.trim().replace(GROUP_LETTER_PREFIX_RE, "").trim();
-    const wrapped = s.match(GROUP_WRAPPER_RE);
-    if (wrapped)
-        s = wrapped[1].trim();
-    return s;
-}
 function isGroupHeaderLine(line) {
-    return matchesKnownGroup(stripGroupDecoration(line));
+    const stripped = line.trim().replace(GROUP_LETTER_PREFIX_RE, "").trim();
+    return KNOWN_GROUP_HEADERS.includes(stripped);
 }
 function groupHeaderName(line) {
-    return stripGroupDecoration(line);
+    return line.trim().replace(GROUP_LETTER_PREFIX_RE, "").trim();
 }
 // OCR (and some copy-pastes) can insert stray spaces in the middle of
 // Japanese words/units — e.g. "小さ じ 1" instead of "小さじ1", or
@@ -632,12 +411,6 @@ function isNoiseLine(line) {
         return true;
     if (/^#\S+(\s*#\S+)*$/.test(line.trim()))
         return true; // hashtag-only line
-    // Reader-proxy / login-wall boilerplate that shows up when a site (e.g.
-    // Instagram) blocks unauthenticated scraping — these are page furniture,
-    // not recipe content. Matched after collapseIntraLineSpaces has already
-    // stripped internal spaces, so e.g. "URL Source:" becomes "URLSource:".
-    if (/^(URLSource:|MarkdownContent:|Title:|LogIn|SignUp|Nevermind)$/i.test(line.trim()))
-        return true;
     return false;
 }
 // Recipe-site step numbers are small circled-digit icons (①②③) that OCR
@@ -676,25 +449,13 @@ function stripStepMarker(line) {
 // "![alt](url)" inline in the flow of text — without stripping this, a
 // recipe step like "①全てを混ぜる" ends up polluted with the raw image
 // markdown and URL that followed it in the source markdown.
-// Instagram's "Never miss a post from X — Sign up..." follow-prompt widget
-// text. It has no line breaks of its own in scraped markdown, so it glues
-// onto whatever real caption text surrounds it (e.g. "...作ってみてね
-// Nevermissapostfromhotcook_kira_8855Signupfor...ホットクック4台持ち...").
-// Since there's no fixed ending for the boilerplate, strip from the trigger
-// phrase up through the next run of Japanese text. Exported separately (not
-// just folded into stripMarkdownNoise) because the URL-import path sends
-// raw page text straight to the AI extraction prompt without going through
-// stripMarkdownNoise first — this needs to run there too.
-function stripInstagramWidgetNoise(text) {
-    return text.replace(/Never\s*miss\s*a\s*post\s*from[^\u3040-\u30ff\u4e00-\u9fff]*?(?=[\u3040-\u30ff\u4e00-\u9fff]|$)/giu, " ");
-}
 function stripMarkdownNoise(text) {
-    return stripInstagramWidgetNoise(text
+    return text
         .replace(/!\[[^\]]*\]\([^)]*\)/g, " ") // markdown images
         .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1") // markdown links -> keep visible text
         .replace(/https?:\/\/\S+/g, " ") // bare URLs
         .replace(/\[\s*\]/g, " ") // leftover empty brackets
-        .replace(/[ \t]{2,}/g, " "));
+        .replace(/[ \t]{2,}/g, " ");
 }
 // Pulls out a hero image URL from the page's markdown. Prefers the image
 // positioned right before the "材料" heading — on SNS posts, an earlier
@@ -790,14 +551,6 @@ function parseCaptionHeuristic(rawText) {
     const lines = cleanedText
         .split(/\r?\n/)
         .map((l) => l.trim())
-        // Blog pages fetched as markdown use "#"/"##"/"###" heading markers
-        // extensively — for section titles like "### 材料" but also, on
-        // many recipe blogs, for the numbered step titles themselves (e.g.
-        // "### 1.内鍋に鶏むね肉をいれる"). Without stripping this prefix,
-        // none of the line-classification checks below (heading match,
-        // step-marker digit match, group-header match) ever fire, since
-        // they all test the start of the string.
-        .map((l) => l.replace(/^#{1,6}\s*/, ""))
         .filter((l) => l.length > 0);
     // Prefer a serving-count mention found shortly after the "材料" heading —
     // a parenthetical match anywhere in the text is unreliable, since posts
@@ -829,21 +582,9 @@ function parseCaptionHeuristic(rawText) {
     let currentGroup = null;
     let currentStep = "";
     let inSteps = false;
-    // Instagram recipe posts often end the real instructions and then run
-    // straight into a promotional sign-off (thanks-for-watching, "follow
-    // for more", asking for likes/comments, decorative divider characters)
-    // with no line break separating the two — so it lands glued onto the
-    // end of the last step's text instead of getting filtered as its own
-    // noise line. Truncate a step's text at the first such marker found.
-    const STEP_CTA_MARKER = /(最後まで見てくれてありがとう|このアカウントは|フォローしてね|コメントや?DM|いいねを?押し|保存して|見てくれてありがとう|[✂♧✧⋆].{0,3}[-.]{3,})/;
-    const stripStepCallToAction = (text) => {
-        const m = text.match(STEP_CTA_MARKER);
-        return m ? text.slice(0, m.index).trim() : text;
-    };
     const flushStep = () => {
-        const cleaned = stripStepCallToAction(currentStep.trim());
-        if (cleaned)
-            steps.push(cleaned);
+        if (currentStep.trim())
+            steps.push(currentStep.trim());
         currentStep = "";
     };
     const SNS_FOOTER_MARKER = /Log\s*in\s*to\s*like\s*or\s*comment|More\s*posts\s*from|VerifiedEnglish|InstagramfromMeta|©\s*20\d\d\s*Instagram|栄養成分|投稿は許可をいただいて/i;
@@ -914,22 +655,7 @@ function parseCaptionHeuristic(rawText) {
         seenIngredients.add(key);
         return true;
     });
-    const dedupedSteps0 = steps.filter((s, i) => s !== steps[i - 1]);
-    // Some source pages (Instagram reels especially) include the full
-    // caption twice in the fetched markdown — e.g. an og:description meta
-    // block followed by the same text again in the visible page body. That
-    // produces steps [1,2,3,1,2,3] rather than adjacent duplicates, which
-    // the filter above doesn't catch. Detect a whole-list repeat (the
-    // second half exactly matching the first) and drop the repeat.
-    let dedupedSteps = dedupedSteps0;
-    if (dedupedSteps0.length >= 2 && dedupedSteps0.length % 2 === 0) {
-        const half = dedupedSteps0.length / 2;
-        const firstHalf = dedupedSteps0.slice(0, half);
-        const secondHalf = dedupedSteps0.slice(half);
-        if (firstHalf.every((s, i) => s === secondHalf[i])) {
-            dedupedSteps = firstHalf;
-        }
-    }
+    const dedupedSteps = steps.filter((s, i) => s !== steps[i - 1]);
     const memoLines = lines
         .filter((l) => l.startsWith("★") || l.startsWith("※"))
         .map((l) => l.replace(/^[★※]\s*/, ""));
@@ -945,7 +671,6 @@ function parseCaptionHeuristic(rawText) {
         meatType: inferred.meatType,
         noodleType: inferred.noodleType,
         vegType: inferred.vegType,
-                        soupType: inferred.soupType,
     };
 }
 // Computes Otsu's threshold: the gray-level that best splits a bimodal
@@ -1005,24 +730,8 @@ function preprocessCanvasForOcr(ctx, width, height) {
         hist[v]++;
     }
     const threshold = otsuThreshold(hist, n);
-    // OCR engines expect dark text on a light background. That's true for
-    // most photographed/screenshotted recipes, but dark-mode screenshots
-    // (e.g. X/Twitter's black background with white text) are the opposite
-    // — binarizing them the same way as a normal image produces white text
-    // on a black background, which reads as close to unrecognizable to
-    // Tesseract. Detect which side of the threshold is the majority (that's
-    // the background, whichever color it is) and make sure IT always ends
-    // up white, flipping the mapping when the background turns out to be
-    // the dark side.
-    let aboveCount = 0;
-    for (let p = 0; p < n; p++) {
-        if (stretched[p] >= threshold)
-            aboveCount++;
-    }
-    const backgroundIsDark = aboveCount < n - aboveCount;
     for (let i = 0, p = 0; i < d.length; i += 4, p++) {
-        const isAboveThreshold = stretched[p] >= threshold;
-        const v = (isAboveThreshold !== backgroundIsDark) ? 255 : 0;
+        const v = stretched[p] >= threshold ? 255 : 0;
         d[i] = v;
         d[i + 1] = v;
         d[i + 2] = v;
@@ -1030,12 +739,10 @@ function preprocessCanvasForOcr(ctx, width, height) {
     ctx.putImageData(imgData, 0, 0);
 }
 // Loads a File into an offscreen canvas, optionally cropped to `rect`
-// (in the image's natural pixel coordinates) and rotated by `rotationDeg`
-// (0/90/180/270, clockwise — set via the crop screen's rotate button for
-// photos that came out sideways or upside-down), upscales small crops for
+// (in the image's natural pixel coordinates), upscales small crops for
 // better OCR, and applies grayscale + contrast-stretch preprocessing —
 // all well-known accuracy boosters for Tesseract on photographed text.
-function loadAndPreprocessImage(file, rect, rotationDeg) {
+function loadAndPreprocessImage(file, rect) {
     return new Promise((resolve, reject) => {
         const img = new Image();
         img.onload = () => {
@@ -1045,23 +752,11 @@ function loadAndPreprocessImage(file, rect, rotationDeg) {
             const sh = rect ? rect.h : img.naturalHeight;
             const minDimension = 1400;
             const scale = sw < minDimension ? minDimension / sw : 1;
-            const outW = Math.round(sw * scale);
-            const outH = Math.round(sh * scale);
-            const rotation = ((rotationDeg || 0) % 360 + 360) % 360;
-            const swapped = rotation === 90 || rotation === 270;
             const canvas = document.createElement("canvas");
-            canvas.width = swapped ? outH : outW;
-            canvas.height = swapped ? outW : outH;
+            canvas.width = Math.round(sw * scale);
+            canvas.height = Math.round(sh * scale);
             const ctx = canvas.getContext("2d");
-            ctx.save();
-            // Rotate around the canvas center, then draw the (unrotated)
-            // source image centered on that same point — this way outW/outH
-            // stay the dimensions of the cropped region regardless of
-            // rotation, and the swapped canvas size above gives it room.
-            ctx.translate(canvas.width / 2, canvas.height / 2);
-            ctx.rotate((rotation * Math.PI) / 180);
-            ctx.drawImage(img, sx, sy, sw, sh, -outW / 2, -outH / 2, outW, outH);
-            ctx.restore();
+            ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
             preprocessCanvasForOcr(ctx, canvas.width, canvas.height);
             resolve(canvas);
         };
@@ -1072,94 +767,22 @@ function loadAndPreprocessImage(file, rect, rotationDeg) {
 // Loads a File into a small, color, compressed JPEG data URI — used to
 // save the person's screenshot as the recipe's photo (separate from the
 // grayscale/binarized version used for OCR, which would look wrong as a
-// dish photo). rotationDeg (0/90/180/270, clockwise) applies the same
-// rotation chosen for that image in the crop screen, so a sideways or
-// upside-down photo comes out right-side-up here too rather than only in
-// the OCR pass.
-function fileToColorDataUrl(file, maxDimension, rotationDeg) {
+// dish photo).
+function fileToColorDataUrl(file, maxDimension) {
     return new Promise((resolve, reject) => {
         const img = new Image();
         img.onload = () => {
             const scale = Math.min(1, maxDimension / Math.max(img.naturalWidth, img.naturalHeight));
-            const outW = Math.max(1, Math.round(img.naturalWidth * scale));
-            const outH = Math.max(1, Math.round(img.naturalHeight * scale));
-            const rotation = ((rotationDeg || 0) % 360 + 360) % 360;
-            const swapped = rotation === 90 || rotation === 270;
             const canvas = document.createElement("canvas");
-            canvas.width = swapped ? outH : outW;
-            canvas.height = swapped ? outW : outH;
+            canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+            canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
             const ctx = canvas.getContext("2d");
-            ctx.save();
-            ctx.translate(canvas.width / 2, canvas.height / 2);
-            ctx.rotate((rotation * Math.PI) / 180);
-            ctx.drawImage(img, -outW / 2, -outH / 2, outW, outH);
-            ctx.restore();
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
             resolve(canvas.toDataURL("image/jpeg", 0.8));
         };
         img.onerror = reject;
         img.src = URL.createObjectURL(file);
     });
-}
-// Extracts the 11-character video ID from either a youtu.be/ID or
-// youtube.com/watch?v=ID style URL.
-function extractYouTubeVideoId(url) {
-    const short = url.match(/youtu\.be\/([\w-]{11})/);
-    if (short)
-        return short[1];
-    const long = url.match(/[?&]v=([\w-]{11})/);
-    if (long)
-        return long[1];
-    return null;
-}
-// YouTube's caption track (the actual spoken/subtitled dialogue — often the
-// only place a cooking video's full ingredient list and steps are written
-// down, since the description frequently just links out or gives a short
-// blurb) isn't reachable with a normal browser fetch: youtube.com doesn't
-// send CORS headers on this endpoint, so a direct cross-origin request gets
-// blocked before it ever reaches our code. Routing it through the same
-// Jina Reader proxy already used for page fetches sidesteps that, since
-// Jina's own server (not the browser) is what actually talks to YouTube —
-// CORS only restricts browser-to-server requests, not server-to-server
-// ones. This is somewhat experimental: Jina is built for rendering
-// webpages, not raw XML caption tracks, so the response format here isn't
-// as predictable as a normal page fetch. Returns "" (never throws) on any
-// failure, so callers can fall back to the regular description-based fetch
-// without special-casing this.
-async function fetchYouTubeCaptions(videoId, jinaApiKey) {
-    for (const lang of ["ja", "en"]) {
-        try {
-            const target = `https://www.youtube.com/api/timedtext?v=${videoId}&lang=${lang}`;
-            const headers = {};
-            if (jinaApiKey)
-                headers["Authorization"] = `Bearer ${jinaApiKey}`;
-            const res = await fetch(`https://r.jina.ai/${target}`, { headers });
-            if (!res.ok)
-                continue;
-            const raw = await res.text();
-            // Caption tracks come back as a run of <text ...>line</text>
-            // elements (or occasionally that same structure still wrapped
-            // in Jina's own markdown framing) — strip all tags, decode the
-            // handful of entities that show up in captions, and join into
-            // plain text for the extraction prompt below.
-            const text = raw
-                .replace(/<[^>]+>/g, "\n")
-                .replace(/&amp;/g, "&")
-                .replace(/&#39;/g, "'")
-                .replace(/&quot;/g, "\"")
-                .replace(/&gt;/g, ">")
-                .replace(/&lt;/g, "<")
-                .split("\n")
-                .map((l) => l.trim())
-                .filter(Boolean)
-                .join("\n");
-            if (text.length > 50)
-                return text;
-        }
-        catch {
-            // try the next language, or fall through to the caller's fallback
-        }
-    }
-    return "";
 }
 async function fetchPageText(url, jinaApiKey) {
     const readerUrl = `https://r.jina.ai/${url}`;
@@ -1204,7 +827,6 @@ async function extractWithClaude(pageText, apiKey) {
       "meatType": "dishCategoryが肉料理の場合のみ、鶏肉 / 豚肉 / 牛肉 / ひき肉 / その他 のいずれか(挽き肉・合いびき肉など特定の動物名がない場合はひき肉)。それ以外はnull",
       "noodleType": "dishCategoryが麺類の場合のみ、うどん / そば / ラーメン / パスタ / その他 のいずれか。それ以外はnull",
       "vegType": "dishCategoryが野菜料理の場合のみ、サラダ / 炒め物 / 和え物・おひたし / 煮物 / 漬け物 / その他 のいずれか。それ以外はnull",
-      "soupType": "dishCategoryがスープ・鍋の場合のみ、スープ / みそ汁 / 鍋 / その他 のいずれか。それ以外はnull",
       "appliance": "本文の手順の中で実際に使われている調理器具が次のいずれかに該当する場合は、必ずそれを選んでください: エアフライヤー / ホットクック / オーブン / 炊飯器 / 圧力鍋 / 電子レンジ。「オーブンで250度で20分」「電子レンジ600Wで2分」のように具体的に書かれていれば、それだけで該当する家電を選んでよい根拠になります。フライパン・鍋・トースターなど上記に無い器具の場合や、器具がまったく本文に出てこない場合のみnullにしてください"
     }
   ]
@@ -1214,7 +836,7 @@ recipesは通常1件の配列です。ページ内に、料理名・材料・手
 
 dishCategory・meatTypeは、材料名や手順の文字列に含まれる単語だけで機械的に判定せず、レシピ全体の内容(主菜の食材・調理法)を理解した上で最も適切なものを選んでください。例えば材料に少量だけ肉が入っていても主役が野菜なら「野菜料理」にしてください。
 
-材料名には、代替案や切り方などの注記(例:「ネギ(できれば九条ネギ)」)はそのまま含めてよいですが、「下味」「衣」「タレ」「合わせ調味料」「調味料」のような明確なサブグループの見出しがある場合だけ、材料名の末尾に "(グループ名)" を付けてください(例: "しょうゆ(下味)")。見出しが「【調味料】」「【下味】」のように【】で囲まれて書かれていても扱いは同じで、【】は装飾なので取り除き、中の言葉(例: "調味料")だけをグループ名として使ってください(例: 【調味料】の下に "醤油" "酢" とあれば "醤油(調味料)" "酢(調味料)")。「ねぎ塩だれ」「ごまだれ」「甘辛あん」のように、具体的な名前+「だれ/ソース/あん/スープ」などの種類語がついた見出しも同様に明確なサブグループとして扱い、その見出し文字列をそのまま "(グループ名)" として付けてください(例: "ねぎ(ねぎ塩だれ)")。見出しが「（A）合わせ調味料」のように参照用の記号(A・B・①など)付きで書かれている場合は、その記号は無視してグループ名本体だけを使ってください(例: "キッコーマン濃いだし本つゆ(合わせ調味料)")。単なる注記をグループ扱いしないでください。見出しが「(A)」のように記号だけで具体的なグループ名が書かれていない場合、または「A塩…小さじ1/3」「B砂糖、酢…各大さじ1」のように各行の先頭にA・Bなどの記号が直接くっついている場合は、その記号自体を "(グループ名)" として材料名の末尾に付けてください(例: "塩(A)"、"砂糖(B)")。この記号は「Ａ卵…１個」のように全角(Ａ・Ｂ・Ｃなど)で書かれていることも多く、その場合も同じルールで扱ってください(例: "卵(Ａ)")。ただし、「【塩】」のような名前付きの見出しが先にあり、その配下の一部の材料だけに「A顆粒鶏ガラ」のように記号が直接くっついている場合は、その記号は「(まとめてもみこむ)」のような単なる内部的な目印であり、見出し名とは別のグループ名を作るものではありません。この場合は記号を無視して、既にある見出し名(例:"塩")だけをグループ名にしてください(誤って"塩(A)"や"塩(A・塩)"のように組み合わせないこと)。同じ見出しの配下にある材料は、記号の有無にかかわらず全員同じグループ名になるようにしてください(例: "手羽先(塩)"、"顆粒鶏ガラ(塩)"、"砂糖(塩)" — "顆粒鶏ガラ(A・塩)"のようにしない)。これは、まとまりがあることをアプリ側で表示するために必要です。いずれの場合も、その記号(A・B・①など、全角半角問わず)が付いている品目を材料リストから省略しないでください。「調味料」「下味」のようにありふれた単語に見えても、材料欄の中で見出しとして機能していれば必ず付けてください。見落としやすいので、材料を書き出した後に、本文にサブグループの見出しがなかったか見直してください。
+材料名には、代替案や切り方などの注記(例:「ネギ(できれば九条ネギ)」)はそのまま含めてよいですが、「下味」「衣」「タレ」「合わせ調味料」「調味料」のような明確なサブグループの見出しがある場合だけ、材料名の末尾に "(グループ名)" を付けてください(例: "しょうゆ(下味)")。見出しが「（A）合わせ調味料」のように参照用の記号(A・B・①など)付きで書かれている場合は、その記号は無視してグループ名本体だけを使ってください(例: "キッコーマン濃いだし本つゆ(合わせ調味料)")。単なる注記をグループ扱いしないでください。見出しが「(A)」のように記号だけで具体的なグループ名が書かれていない場合、または「A塩…小さじ1/3」「B砂糖、酢…各大さじ1」のように各行の先頭にA・Bなどの記号が直接くっついている場合は、その記号自体を "(グループ名)" として材料名の末尾に付けてください(例: "塩(A)"、"砂糖(B)")。これは、まとまりがあることをアプリ側で表示するために必要です。いずれの場合も、その記号(A・B・①など)が付いている品目を材料リストから省略しないでください。
 
 材料の見つけ方: 本文中に「材料」という語を含む見出し(「材料」「材料(2人分)」など)があれば、そこが本来の材料欄です。その見出しの直後から、次の見出しや「作り方」「①」などの手順の始まりの直前までに列挙されている品目を、1品も欠かさずすべて書き出してください。分量(大さじ・小さじ・g・個数など)が書かれていればそのまま使い、書かれていなければ空欄のままにしてください(適量などと勝手に補わない)。
 このブログ特有の注意点として、記事の冒頭の自己紹介文に「◆大さじ１杯の生クリーム」「◆ローリエ、バルサミコ酢…」のような食材の例が箇条書きで出てくることがありますが、これは直後に「〜は使いません」と続く冗談で、実際の材料ではありません。この部分だけは無視してください——ただし、これはあくまで「材料」見出しより前に出てくる自己紹介文の中の話であり、実際の「材料」見出し以降にある品目は(似た書き方に見えても)すべて本物の材料なので、絶対に省略しないでください。
@@ -1408,7 +1030,7 @@ function sortByDueDate(list) {
 const TODO_FONT_DISPLAY = "'Noto Sans JP', sans-serif";
 const TODO_FONT_BODY = "'Noto Sans JP', sans-serif";
 const LISTS = {
-    todo: { dbKey: "todos", groupsKey: "todos-groups", label: "ToDo", placeholder: "やることを入力...", emptyAll: "タスクを追加してみましょう" },
+    todo: { dbKey: "todos", groupsKey: "todos-groups", label: "今日のToDo", placeholder: "やることを入力...", emptyAll: "タスクを追加してみましょう" },
     shopping: { dbKey: "shopping", groupsKey: "shopping-groups", label: "買い物リスト", placeholder: "買うものを入力...", emptyAll: "買うものを追加してみましょう" },
 };
 const NO_GROUP = "__none__";
@@ -1462,8 +1084,7 @@ function shoppingCategory(text) {
 }
 
 
-function ShoppingEmptyState({ listKey }) {
-    const isTodo = listKey === "todo";
+function ShoppingEmptyState() {
     return React.createElement("div", { style: {
             flex: 1,
             minHeight: 360,
@@ -1518,21 +1139,20 @@ function ShoppingEmptyState({ listKey }) {
                     fontWeight: 800,
                     color: TODO_PALETTE.ink,
                     marginBottom: 8
-                } }, isTodo ? "タスクはありません" : "リストは空です"),
+                } }, "リストは空です"),
             React.createElement("div", { style: {
                     fontSize: 13,
                     color: TODO_PALETTE.inkSoft,
                     lineHeight: 1.65
-                } }, isTodo ? "下の入力欄からやることを追加してみましょう" : "下の入力欄から買うものを追加してみましょう")
+                } }, "下の入力欄から買うものを追加してみましょう")
         )
     );
 }
 
-function TodoApp({ initialListKey, myName, ungroupedLabels }) {
+function TodoApp({ listKey, myName, ungroupedLabel }) {
     const [items, setItems] = useState({ todo: [], shopping: [] });
     const [readyLists, setReadyLists] = useState({ todo: false, shopping: false });
     const [groups, setGroups] = useState({ todo: [], shopping: [] });
-    const [activeList, setActiveList] = useState(initialListKey || "shopping");
     const [input, setInput] = useState("");
     const [dueDateDraft, setDueDateDraft] = useState("");
     const [newMemoDraft, setNewMemoDraft] = useState("");
@@ -1545,61 +1165,15 @@ function TodoApp({ initialListKey, myName, ungroupedLabels }) {
     const [composerOpen, setComposerOpen] = useState(false);
     const [openDetailId, setOpenDetailId] = useState(null);
     const inputRef = useRef(null);
-    const ungroupedLabel = ungroupedLabels?.[activeList];
+    const activeList = listKey;
     // realtime listeners for todos/shopping/groups
     useEffect(() => {
-        // Show cached items instantly while the Firebase listener connects
-        // (same pattern recipes already use) — this is what was missing
-        // here, so opening the 買い物 tab always waited on a fresh network
-        // round-trip before showing anything, which read as "not
-        // reflecting" even though the data itself wasn't especially large.
-        (async () => {
-            let parsed = null;
-            try {
-                const cached = await storage.get("todoItems");
-                if (cached) {
-                    parsed = JSON.parse(cached.value);
-                }
-                else {
-                    // One-time migration from the old localStorage-only cache
-                    // (see the same pattern's comment on the recipes cache
-                    // above for why).
-                    const legacy = localStorage.getItem("todoItems");
-                    if (legacy) {
-                        parsed = JSON.parse(legacy);
-                        await storage.set("todoItems", legacy);
-                    }
-                }
-                if (parsed) {
-                    setItems(parsed);
-                    setReadyLists((prev) => ({
-                        ...prev,
-                        ...Object.fromEntries(Object.keys(parsed).map((k) => [k, true])),
-                    }));
-                }
-            }
-            catch {
-                // ignore
-            }
-            try {
-                localStorage.removeItem("todoItems");
-            }
-            catch {
-                // ignore
-            }
-        })();
         const refs = [];
         Object.keys(LISTS).forEach((key) => {
             const itemsRef = uref(LISTS[key].dbKey);
             const cb = itemsRef.on("value", (snap) => {
                 const val = snap.val();
-                setItems((prev) => {
-                    const next = { ...prev, [key]: val ? val : [] };
-                    storage.set("todoItems", JSON.stringify(next)).catch(() => {
-                        // ignore — cache is best-effort
-                    });
-                    return next;
-                });
+                setItems((prev) => ({ ...prev, [key]: val ? val : [] }));
                 setReadyLists((prev) => ({ ...prev, [key]: true }));
             });
             refs.push([itemsRef, cb]);
@@ -1662,24 +1236,7 @@ function TodoApp({ initialListKey, myName, ungroupedLabels }) {
         saveItems(activeList, items[activeList].filter((t) => !t.done));
     }
     function completeAll() {
-        // Only complete the items currently shown under the active tab
-        // (groupFilter) — not every item in the whole list. This mirrors
-        // the same filter logic used for `visible` below (kept separate
-        // here since completeAll is defined before `visible` exists yet
-        // closes over the same render's values by the time it's actually
-        // invoked from a click).
-        const idsToComplete = new Set(currentItems
-            .filter((t) => {
-            if (groupFilter === "all")
-                return true;
-            if (groupFilter === RECIPE_GROUP)
-                return t.source === "recipe";
-            if (groupFilter === NO_GROUP)
-                return t.source !== "recipe" && (!t.groupId || !currentGroups.some((g) => g.id === t.groupId));
-            return t.groupId === groupFilter;
-        })
-            .map((t) => t.id));
-        saveItems(activeList, items[activeList].map((t) => (idsToComplete.has(t.id) && !t.done ? { ...t, done: true } : t)));
+        saveItems(activeList, items[activeList].map((t) => (t.done ? t : { ...t, done: true })));
     }
     function setItemDueDate(id, dateStr) {
         saveItems(activeList, items[activeList].map((t) => (t.id === id ? { ...t, dueDate: dateStr || null } : t)));
@@ -1759,21 +1316,15 @@ function TodoApp({ initialListKey, myName, ungroupedLabels }) {
     }
     const today = new Date();
     const dateStr = today.toLocaleDateString("ja-JP", { month: "long", day: "numeric", weekday: "short" });
-    return React.createElement("div", { style: { fontFamily: TODO_FONT_BODY, background: TODO_PALETTE.paper, minHeight: "100%", maxWidth: 480, margin: "0 auto", display: "flex", flexDirection: "column", color: TODO_PALETTE.ink, fontSize: 13, position: "relative" } }, 
+    return React.createElement("div", { style: { fontFamily: TODO_FONT_BODY, background: TODO_PALETTE.paper, minHeight: "100%", maxWidth: 480, margin: "0 auto", display: "flex", flexDirection: "column", color: TODO_PALETTE.ink, fontSize: 13 } }, 
     // header
     React.createElement("div", { style: { padding: "18px 16px 10px" } },
-        React.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 10 } },
-            Object.keys(LISTS).map((key) => React.createElement("button", { key: key, onClick: () => setActiveList(key), style: {
-                    padding: "6px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 800, cursor: "pointer",
-                    border: `1px solid ${activeList === key ? TODO_PALETTE.sage : TODO_PALETTE.line}`,
-                    background: activeList === key ? TODO_PALETTE.sage : "transparent",
-                    color: activeList === key ? "#fff" : TODO_PALETTE.inkSoft,
-                } }, LISTS[key].label))),
-        React.createElement("div", { style: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 } },
+        React.createElement("div", { style: { fontSize: 10, fontWeight: 800, letterSpacing: "0.12em", color: TODO_PALETTE.sage, marginBottom: 3 } }, "SHOPPING LIST"),
+        React.createElement("div", null,
             React.createElement("div", { style: { fontFamily: TODO_FONT_DISPLAY, fontSize: 24, fontWeight: 800, letterSpacing: "0.01em" } }, LISTS[activeList].label),
-            React.createElement("div", { style: { flexShrink: 0, textAlign: "right" } },
-                React.createElement("div", { style: { fontSize: 11, color: TODO_PALETTE.inkSoft } }, dateStr),
-                myName && React.createElement("div", { style: { fontSize: 11, color: TODO_PALETTE.inkSoft, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 5, marginTop: 3 } }, React.createElement("span", { style: { width: 7, height: 7, borderRadius: "50%", background: colorForName(myName).dot, display: "inline-block" } }), `あなた：${myName}`)))
+            React.createElement("div", { style: { fontSize: 11, color: TODO_PALETTE.inkSoft, marginTop: 3 } }, dateStr)
+        ),
+        React.createElement("div", { style: { marginTop: 10, fontSize: 11, color: TODO_PALETTE.inkSoft } }, "買うものを売り場ごとに自動でまとめています")
     ), (currentGroups.length > 0 || recipeCount > 0) && React.createElement("div", { style: { display: "flex", gap: 6, padding: "0 14px 8px", overflowX: "auto", WebkitOverflowScrolling: "touch" } }, [
         { key: "all", label: `すべて (${remaining})` },
         ...(recipeCount > 0 ? [{ key: RECIPE_GROUP, label: `レシピ (${recipeCount})` }] : []),
@@ -1782,15 +1333,15 @@ function TodoApp({ initialListKey, myName, ungroupedLabels }) {
     ].map((f) => React.createElement("button", { key: f.key, onClick: () => setGroupFilter(f.key),
         style: { flexShrink: 0, cursor: "pointer", padding: "6px 12px", borderRadius: 10, fontSize: 12.5, fontWeight: 700, fontFamily: TODO_FONT_DISPLAY, whiteSpace: "nowrap",
             background: groupFilter === f.key ? TODO_PALETTE.ink : TODO_PALETTE.card, color: groupFilter === f.key ? "#fff" : TODO_PALETTE.inkSoft,
-            border: groupFilter === f.key ? "none" : `1px solid ${TODO_PALETTE.line}` } }, f.label))),
+            border: groupFilter === f.key ? "none" : `1px solid ${TODO_PALETTE.line}` } }, f.label))), myName && React.createElement("div", { style: { margin: "0 14px 8px", fontSize: 11, color: TODO_PALETTE.inkSoft, display: "flex", alignItems: "center", gap: 5 } }, React.createElement("span", { style: { width: 7, height: 7, borderRadius: "50%", background: colorForName(myName).dot, display: "inline-block" } }), `あなた：${myName}`), 
     // action row (search / complete-all)
-    React.createElement("div", { style: { display: "flex", gap: 6, padding: "0 14px 8px", alignItems: "center" } }, activeList === "shopping" && currentItems.some((t) => !t.done) && React.createElement("button", { onClick: completeAll, title: "すべて完了にする",
+    React.createElement("div", { style: { display: "flex", gap: 6, padding: "0 14px 8px", alignItems: "center" } }, listKey === "shopping" && currentItems.some((t) => !t.done) && React.createElement("button", { onClick: completeAll, title: "すべて完了にする",
         style: { border: `1px solid ${TODO_PALETTE.sage}`, cursor: "pointer", background: TODO_PALETTE.sageSoft, color: TODO_PALETTE.sage, fontSize: 11, fontFamily: TODO_FONT_BODY, borderRadius: 999, padding: "4px 10px", whiteSpace: "nowrap" } }, "\u2713 \u4E00\u62EC\u5B8C\u4E86"), React.createElement("button", { onClick: () => setShowSearch((s) => !s), "aria-label": "検索",
         style: { marginLeft: "auto", border: "none", background: "transparent", color: showSearch ? TODO_PALETTE.sage : TODO_PALETTE.inkSoft, fontSize: 13, cursor: "pointer", padding: "2px 6px" } }, "\uD83D\uDD0D")), showSearch && React.createElement("div", { style: { padding: "0 14px 8px" } }, React.createElement("input", { autoFocus: true, value: searchQuery, onChange: (e) => setSearchQuery(e.target.value),
         placeholder: "キーワードで検索...",
         style: { width: "100%", boxSizing: "border-box", border: `1px solid ${TODO_PALETTE.line}`, borderRadius: 8, padding: "6px 10px", fontSize: 16, fontFamily: TODO_FONT_BODY, outline: "none", background: TODO_PALETTE.card } })), 
     // list
-    React.createElement("div", { style: { flex: 1, padding: "4px 14px 118px", display: "flex", flexDirection: "column", gap: 8 } }, readyLists[activeList] && visible.length === 0 && doneItems.length === 0 && React.createElement(ShoppingEmptyState, { listKey: activeList }), sections.map((sec, i) => React.createElement(React.Fragment, { key: sec.label }, React.createElement("div", { style: { fontSize: 11, color: TODO_PALETTE.inkSoft, fontWeight: 800, letterSpacing: "0.05em", margin: i === 0 ? "5px 3px 1px" : "14px 3px 1px" } }, sec.label), sec.items.map((t) => React.createElement(ItemCard, { key: t.id, item: t, groupsList: currentGroups,
+    React.createElement("div", { style: { flex: 1, padding: "4px 14px 118px", display: "flex", flexDirection: "column", gap: 8 } }, readyLists[activeList] && visible.length === 0 && doneItems.length === 0 && React.createElement(ShoppingEmptyState, null), sections.map((sec, i) => React.createElement(React.Fragment, { key: sec.label }, React.createElement("div", { style: { fontSize: 11, color: TODO_PALETTE.inkSoft, fontWeight: 800, letterSpacing: "0.05em", margin: i === 0 ? "5px 3px 1px" : "14px 3px 1px" } }, sec.label), sec.items.map((t) => React.createElement(ItemCard, { key: t.id, item: t, groupsList: currentGroups,
         onToggle: toggleItem, onDelete: deleteItem, onSetDueDate: setItemDueDate, onSetMemo: setItemMemo, onSetGroup: setItemGroup, onOpenDetail: setOpenDetailId })))),
     doneItems.length > 0 && React.createElement(React.Fragment, null,
         React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", margin: "14px 2px 6px" } },
@@ -1916,10 +1467,10 @@ function TodoApp({ initialListKey, myName, ungroupedLabels }) {
             bottom: "calc(82px + env(safe-area-inset-bottom, 0px))",
             width: 58, height: 58, borderRadius: "50%",
             border: "none", background: TODO_PALETTE.sage, color: "#fff",
-                display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60,
-                boxShadow: "0 10px 28px rgba(67,84,69,0.28)"
-            }
-        }, React.createElement(Plus, { size: 26 })),
+            display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60,
+            boxShadow: "0 10px 28px rgba(67,84,69,0.28)"
+        }
+    }, React.createElement(Plus, { size: 26 })),
     openDetailId && React.createElement(ItemDetailModal, {
         item: currentItems.find((t) => t.id === openDetailId),
         groupsList: currentGroups,
@@ -1937,8 +1488,8 @@ function ItemCard({ item, groupsList, onToggle, onSetDueDate, onSetMemo, onOpenD
     const overdue = isOverdue(item.dueDate, item.done);
     const hasMemo = !!(item.memo && item.memo.trim());
     return React.createElement("div", {
-        style: { background: TODO_PALETTE.card, border: `1px solid ${TODO_PALETTE.line}`, borderRadius: RADIUS.cardSmall, padding: "14px 13px",
-            boxShadow: SHADOW.soft,
+        style: { background: TODO_PALETTE.card, border: `1px solid ${TODO_PALETTE.line}`, borderRadius: 16, padding: "14px 13px",
+            boxShadow: "0 2px 10px rgba(51,48,42,0.035)",
             display: "flex", alignItems: "flex-start", gap: 10, opacity: item.done ? 0.55 : 1, cursor: "pointer" },
         onClick: () => onOpenDetail(item.id)
     },
@@ -2031,7 +1582,6 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
     const [loaded, setLoaded] = useState(false);
     const [view, setView] = useState(initialView || "list"); // list | add | detail | editRecipe | calendar
     const [detailOrigin, setDetailOrigin] = useState("list"); // "list" | "calendar" — where "一覧へ" should return to
-    const [calendarMode, setCalendarMode] = useState("plan"); // remembers which calendar tab was active across a detail-view detour
     const [addMode, setAddMode] = useState("url");
     const [selectedId, setSelectedId] = useState(null);
     const [editDraft, setEditDraft] = useState(null);
@@ -2040,7 +1590,6 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
     const [meatTypeFilter, setMeatTypeFilter] = useState(null);
     const [noodleTypeFilter, setNoodleTypeFilter] = useState(null);
     const [vegTypeFilter, setVegTypeFilter] = useState(null);
-    const [soupTypeFilter, setSoupTypeFilter] = useState(null);
     const [applianceFilter, setApplianceFilter] = useState(null);
     const [inputUrl, setInputUrl] = useState("");
     const [inputText, setInputText] = useState("");
@@ -2056,112 +1605,40 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
     const [urlImporting, setUrlImporting] = useState(false);
     const [extracting, setExtracting] = useState(false);
     const [screenshotImageUrl, setScreenshotImageUrl] = useState("");
-    const [screenshotImageUrl2, setScreenshotImageUrl2] = useState("");
-    const [screenshotImageUrl3, setScreenshotImageUrl3] = useState("");
     const [urlImportError, setUrlImportError] = useState("");
     const [urlImportNotice, setUrlImportNotice] = useState("");
     useEffect(() => {
         // Show cached data instantly while the Firebase listener connects, so
         // the app isn't blank on a slow connection.
-        (async () => {
-            try {
-                const cached = await storage.get("recipes");
-                if (cached) {
-                    setRecipes(JSON.parse(cached.value));
-                }
-                else {
-                    // One-time migration: this cache used to live directly in
-                    // localStorage under the same key, before it moved to
-                    // IndexedDB above. If nothing's in IndexedDB yet, carry
-                    // over whatever's still sitting in localStorage from
-                    // before the upgrade (for continuity — otherwise the very
-                    // first load after upgrading would lose the instant-paint
-                    // benefit for one session), then migrate it over and
-                    // reclaim the localStorage space.
-                    const legacy = localStorage.getItem("recipes");
-                    if (legacy) {
-                        setRecipes(JSON.parse(legacy));
-                        await storage.set("recipes", legacy);
-                    }
-                }
-            }
-            catch {
-                // ignore
-            }
-            try {
-                localStorage.removeItem("recipes");
-            }
-            catch {
-                // ignore
-            }
-        })();
-        // One-time, shared migration: recipe-index/ (see buildRecipeIndexEntry
-        // and writeRecipe above) didn't always exist — recipes saved before
-        // this update only have their full record under recipes/. Backfill
-        // the index for those once, gated on a flag in the database so it
-        // only ever runs once total (for whichever family member's device
-        // happens to load the app first after the update), not once per
-        // device.
-        (async () => {
-            try {
-                const flagSnap = await uref("meta/recipeIndexBuilt").once("value");
-                if (flagSnap.val())
-                    return;
-                const fullSnap = await uref("recipes").once("value");
-                const all = fullSnap.val() || {};
-                const updates = {};
-                Object.keys(all).forEach((id) => {
-                    updates[`recipe-index/${id}`] = buildRecipeIndexEntry(all[id]);
-                });
-                updates["meta/recipeIndexBuilt"] = true;
-                await rtdb.ref().update(updates);
-            }
-            catch {
-                // Best-effort — if this fails (e.g. offline), the index
-                // stays incomplete for now and the list view falls back to
-                // whatever's already in recipe-index/ until it can retry on
-                // a future load.
-            }
-        })();
-        const indexRef = uref("recipe-index");
-        const indexCallback = (snapshot) => {
+        try {
+            const cachedRecipes = localStorage.getItem("recipes");
+            if (cachedRecipes)
+                setRecipes(JSON.parse(cachedRecipes));
+        }
+        catch {
+            // ignore
+        }
+        const recipesRef = uref("recipes");
+        const recipesCallback = (snapshot) => {
             const val = snapshot.val();
             const list = val ? Object.values(val).sort((a, b) => (b.savedAt || "").localeCompare(a.savedAt || "")) : [];
             setRecipes(list);
             setLoaded(true);
-            storage.set("recipes", JSON.stringify(list)).catch(() => {
+            try {
+                localStorage.setItem("recipes", JSON.stringify(list));
+            }
+            catch {
                 // ignore — cache is best-effort
-            });
+            }
         };
-        indexRef.on("value", indexCallback, () => {
+        recipesRef.on("value", recipesCallback, () => {
             // Firebase unreachable — fall back to whatever was cached locally
             setLoaded(true);
         });
         return () => {
-            indexRef.off("value", indexCallback);
+            recipesRef.off("value", recipesCallback);
         };
     }, []);
-    // The list above only carries the lightweight recipe-index summary —
-    // ingredients/steps/memo/servings/sourceUrl live only in the full
-    // recipes/{id} record, fetched here on demand for whichever single
-    // recipe is actually open (detail view or editing), not for the whole
-    // list. `.on` (not `.once`) so an edit saved elsewhere for the same
-    // recipe is reflected immediately while it's open.
-    const [fullRecipe, setFullRecipe] = useState(null);
-    const [fullRecipeLoading, setFullRecipeLoading] = useState(false);
-    useEffect(() => {
-        if (!selectedId || (view !== "detail" && view !== "editRecipe")) {
-            return;
-        }
-        setFullRecipeLoading(true);
-        const ref = uref(`recipes/${selectedId}`);
-        const cb = (snap) => {
-            setFullRecipe(snap.val());
-            setFullRecipeLoading(false);
-        };
-        ref.on("value", cb, () => setFullRecipeLoading(false));
-        return () => ref.off("value", cb);
-    }, [selectedId, view]);
     const [mealPlan, setMealPlan] = useState({}); // { "YYYY-MM-DD": { recipeId, title } }
     useEffect(() => {
         const planRef = uref("meal-plan");
@@ -2189,7 +1666,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
             const current = Array.isArray(prev[dateStr]) ? prev[dateStr] : [];
             if (current.some((e) => e.recipeId === recipe.id) || current.length >= MAX_MEALS_PER_DAY)
                 return prev;
-            const entry = { recipeId: recipe.id, title: recipe.title, imageUrl: recipe.imageUrl || recipe.imageUrl2 || recipe.imageUrl3 || "", dishCategory: recipe.dishCategory || null };
+            const entry = { recipeId: recipe.id, title: recipe.title, imageUrl: recipe.imageUrl || recipe.imageUrl2 || "", dishCategory: recipe.dishCategory || null };
             const next = [...current, entry];
             uref(`meal-plan/${dateStr}`).set(next);
             return { ...prev, [dateStr]: next };
@@ -2230,18 +1707,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
     }
     const writeRecipe = useCallback(async (recipe) => {
         try {
-            // Two writes: the full record (ingredients/steps/etc — used only
-            // when a specific recipe is actually opened) and a lightweight
-            // summary in recipe-index/ (title, photo, category fields, and
-            // just ingredient *names* for search) that the list/filter/
-            // meal-plan views run on day to day. Splitting these is what
-            // keeps opening the app fast as the recipe count grows — before
-            // this, every list view fetched every recipe's full ingredients,
-            // steps, and photos just to show a title and thumbnail.
-            await Promise.all([
-                uref(`recipes/${recipe.id}`).set(recipe),
-                uref(`recipe-index/${recipe.id}`).set(buildRecipeIndexEntry(recipe)),
-            ]);
+            await uref(`recipes/${recipe.id}`).set(recipe);
         }
         catch {
             setSaveError("保存に失敗しました(通信環境を確認してください)。");
@@ -2249,10 +1715,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
     }, []);
     const removeRecipeRemote = useCallback(async (id) => {
         try {
-            await Promise.all([
-                uref(`recipes/${id}`).remove(),
-                uref(`recipe-index/${id}`).remove(),
-            ]);
+            await uref(`recipes/${id}`).remove();
         }
         catch {
             setSaveError("削除に失敗しました(通信環境を確認してください)。");
@@ -2273,40 +1736,35 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
         setOcrProgress("");
         setUrlImportError("");
         setScreenshotImageUrl("");
-        setScreenshotImageUrl2("");
-        setScreenshotImageUrl3("");
     };
     // Step 1: user picks screenshots — queue them up for cropping rather than
     // OCR'ing immediately. Letting the person exclude photos/ads/nav bars
     // before OCR runs is the single biggest accuracy win we've found.
-    // If a crop session is already in progress (cropQueue/cropResults
-    // non-empty), append rather than replace — this is what lets someone
-    // build up a multi-photo set via repeated single-shot camera captures,
-    // since iOS only ever hands back one photo per "Take Photo" tap.
     const handleScreenshots = (fileList) => {
         const files = Array.from(fileList || []);
         if (files.length === 0)
             return;
         setOcrError("");
-        const inProgress = cropQueue.length > 0 || cropResults.length > 0;
-        const newItems = files.map((file) => ({ file, url: URL.createObjectURL(file) }));
-        if (inProgress) {
-            setCropQueue((prev) => [...prev, ...newItems]);
-        }
-        else {
-            setCropResults([]);
-            setCropIndex(0);
-            setCropQueue(newItems);
-        }
+        setCropResults([]);
+        setCropIndex(0);
+        setCropQueue(files.map((file) => ({ file, url: URL.createObjectURL(file) })));
+        // Grab a color copy of the first screenshot to offer as the recipe's
+        // photo, in case it's an actual photo of the finished dish rather than
+        // a text screenshot (the person can remove it in the editor if not).
+        fileToColorDataUrl(files[0], 900)
+            .then((dataUrl) => setScreenshotImageUrl(dataUrl))
+            .catch(() => {
+            // non-critical — just skip attaching a photo
+        });
     };
-    const handleCropConfirm = (rect, rotation) => {
-        const entry = { file: cropQueue[cropIndex].file, rect, rotation: rotation || 0 };
+    const handleCropConfirm = (rect) => {
+        const entry = { file: cropQueue[cropIndex].file, rect };
         advanceCropQueue([...cropResults, entry]);
     };
     const handleCropSkip = () => {
         advanceCropQueue(cropResults);
     };
-    const advanceCropQueue = async (resultsSoFar) => {
+    const advanceCropQueue = (resultsSoFar) => {
         if (cropIndex + 1 < cropQueue.length) {
             setCropResults(resultsSoFar);
             setCropIndex((i) => i + 1);
@@ -2314,33 +1772,10 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
         else {
             setCropQueue([]);
             setCropResults([]);
-            // Grab color copies of the first (and, when multiple images were
-            // picked, second and third) photo — rotated the same way each
-            // was in the crop screen — to offer as the recipe's own
-            // photo(s), in case they're actual photos of the finished dish
-            // rather than text screenshots (the person can remove them in
-            // the editor if not). Done here — once the final rotation is
-            // known — rather than back when the files were first picked,
-            // so a photo that needed rotating comes out right-side-up here
-            // too.
-            //
-            // Awaited (not fire-and-forget) and passed straight through to
-            // runOcrBatch/handleExtract as a parameter, rather than relying
-            // on the screenshotImageUrl* state being updated in time: those
-            // functions were already in flight by the time setState here
-            // would resolve into a new render, so reading the state inside
-            // them was seeing a stale (empty) closure and every imported
-            // photo was silently getting dropped from the saved recipe.
-            const photoUrls = await Promise.all([resultsSoFar[0], resultsSoFar[1], resultsSoFar[2]].map((item) => item
-                ? fileToColorDataUrl(item.file, 900, item.rotation).catch(() => "")
-                : Promise.resolve("")));
-            setScreenshotImageUrl(photoUrls[0]);
-            setScreenshotImageUrl2(photoUrls[1]);
-            setScreenshotImageUrl3(photoUrls[2]);
-            runOcrBatch(resultsSoFar, photoUrls);
+            runOcrBatch(resultsSoFar);
         }
     };
-    const runOcrBatch = async (items, photoUrls) => {
+    const runOcrBatch = async (items) => {
         if (!items.length)
             return;
         setOcrRunning(true);
@@ -2351,7 +1786,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
             if (apiKey) {
                 for (let i = 0; i < items.length; i++) {
                     setOcrProgress(`${i + 1}/${items.length}枚目を読み取り中...`);
-                    const canvas = await loadAndPreprocessImage(items[i].file, items[i].rect, items[i].rotation);
+                    const canvas = await loadAndPreprocessImage(items[i].file, items[i].rect);
                     try {
                         const text = await transcribeImageWithClaude(canvas, apiKey);
                         combined += (combined ? "\n" : "") + text.trim();
@@ -2373,7 +1808,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
                 worker = await createWorker("jpn");
                 for (let i = 0; i < items.length; i++) {
                     setOcrProgress(`${i + 1}/${items.length}枚目を読み取り中...`);
-                    const canvas = await loadAndPreprocessImage(items[i].file, items[i].rect, items[i].rotation);
+                    const canvas = await loadAndPreprocessImage(items[i].file, items[i].rect);
                     const { data } = await worker.recognize(canvas);
                     combined += (combined ? "\n" : "") + (data?.text || "").trim();
                 }
@@ -2385,7 +1820,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
             }
             if (apiKey && combined.trim()) {
                 setOcrProgress("レシピを抽出中...");
-                await handleExtract(fullText, photoUrls);
+                await handleExtract(fullText);
             }
         }
         catch (e) {
@@ -2406,30 +1841,10 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
     };
     const cleanupSteps = (steps) => (steps || []).map((s) => s.trim()).filter(Boolean);
     const saveRecipe = async (recipeData) => {
-        const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-        // If imageUrl/imageUrl2/imageUrl3 came in as a raw base64 data URL
-        // (e.g. the screenshots auto-attached from a photo import),
-        // re-compress them down to the same small target used everywhere
-        // else — see recompressDataUrl for why this matters.
-        let imageUrl = recipeData.imageUrl || "";
-        let imageUrl2 = recipeData.imageUrl2 || "";
-        let imageUrl3 = recipeData.imageUrl3 || "";
-        if (imageUrl.startsWith("data:")) {
-            imageUrl = await recompressDataUrl(imageUrl, 450, 0.6).catch(() => imageUrl);
-        }
-        if (imageUrl2.startsWith("data:")) {
-            imageUrl2 = await recompressDataUrl(imageUrl2, 450, 0.6).catch(() => imageUrl2);
-        }
-        if (imageUrl3.startsWith("data:")) {
-            imageUrl3 = await recompressDataUrl(imageUrl3, 450, 0.6).catch(() => imageUrl3);
-        }
         const newRecipe = {
             ...recipeData,
             steps: cleanupSteps(recipeData.steps),
-            id,
-            imageUrl,
-            imageUrl2,
-            imageUrl3,
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
             savedAt: new Date().toISOString(),
         };
         await writeRecipe(newRecipe);
@@ -2438,7 +1853,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
     // overrideText lets callers (like the screenshot-OCR flow) trigger
     // extraction immediately with freshly-read text, without waiting on a
     // state update round-trip.
-    const handleExtract = async (overrideText, photoUrls) => {
+    const handleExtract = async (overrideText) => {
         const textToUse = typeof overrideText === "string" ? overrideText : inputText;
         if (!textToUse.trim()) {
             setExtractError("投稿のキャプション文を貼り付けてください。");
@@ -2453,7 +1868,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
                     const structuredList = await extractWithClaude(textToUse, apiKey);
                     parsedList = structuredList.map((structured) => {
                         const classifyText = `${structured.title || ""} ${textToUse}`;
-                        const inferred = resolveClassification(structured, classifyText, structured.ingredients || [], textToUse, true, structured.title || "");
+                        const inferred = resolveClassification(structured, classifyText, structured.ingredients || [], textToUse, true);
                         return {
                             title: structured.title || "",
                             servings: structured.servings || "",
@@ -2465,7 +1880,6 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
                             meatType: inferred.meatType,
                             noodleType: inferred.noodleType,
                             vegType: inferred.vegType,
-                        soupType: inferred.soupType,
                             appliance: inferred.appliance,
                         };
                     });
@@ -2486,9 +1900,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
                     ...parsed,
                     sourceUrl: inputUrl.trim(),
                     sourceType: detectSource(inputUrl),
-                    imageUrl: (photoUrls ? photoUrls[0] : screenshotImageUrl) || "",
-                    imageUrl2: (photoUrls ? photoUrls[1] : screenshotImageUrl2) || "",
-                    imageUrl3: (photoUrls ? photoUrls[2] : screenshotImageUrl3) || "",
+                    imageUrl: screenshotImageUrl || "",
                 };
                 savedRecipes.push(await saveRecipe(recipeData));
             }
@@ -2496,7 +1908,6 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
             if (savedRecipes.length === 1) {
                 setSelectedId(savedRecipes[0].id);
                 setView("detail");
-                setConfirmDelete(false);
             }
             else {
                 setView("list");
@@ -2520,36 +1931,23 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
         setUrlImportNotice("");
         setUrlImporting(true);
         try {
-            const pageText = stripInstagramWidgetNoise(await fetchPageText(url, jinaApiKey));
+            const pageText = await fetchPageText(url, jinaApiKey);
             const imageUrl = extractHeroImageUrl(pageText);
             const pageTitle = extractPageTitle(pageText);
-            // YouTube descriptions are often just a short blurb/links, and
-            // the caption track sometimes lacks a written ingredients list
-            // even when it has the spoken steps (or vice versa) — combine
-            // both into one extraction pass rather than picking only one,
-            // so whichever source has the missing half still contributes.
-            const videoId = extractYouTubeVideoId(url);
-            let extractionSource = pageText;
-            if (videoId) {
-                const captions = await fetchYouTubeCaptions(videoId, jinaApiKey);
-                if (captions) {
-                    extractionSource = `${pageText}\n\n${captions}`;
-                }
-            }
             let structuredList;
             let usedClaude = false;
             if (apiKey) {
                 try {
-                    structuredList = await extractWithClaude(extractionSource, apiKey);
+                    structuredList = await extractWithClaude(pageText, apiKey);
                     usedClaude = true;
                 }
                 catch {
                     // fall back to local parsing rather than failing outright
-                    structuredList = [parseCaptionHeuristic(extractionSource)];
+                    structuredList = [parseCaptionHeuristic(pageText)];
                 }
             }
             else {
-                structuredList = [parseCaptionHeuristic(extractionSource)];
+                structuredList = [parseCaptionHeuristic(pageText)];
             }
             // Always create the record(s) immediately on a successful fetch —
             // never block on a review screen. Most pages have exactly one
@@ -2562,7 +1960,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
                 const finalTitle = structured.title || (i === 0 ? pageTitle : "");
                 const classifyText = `${finalTitle} ${pageText.slice(0, 3000)}`;
                 const applianceSource = `${finalTitle} ${(structured.steps || []).join(" ")} ${structured.memo || ""} ${pageText.slice(0, 3000)}`;
-                const inferred = resolveClassification(structured, classifyText, structured.ingredients || [], applianceSource, usedClaude, finalTitle);
+                const inferred = resolveClassification(structured, classifyText, structured.ingredients || [], applianceSource, usedClaude);
                 const recipeData = {
                     title: finalTitle,
                     servings: structured.servings || "",
@@ -2574,7 +1972,6 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
                     meatType: inferred.meatType,
                     noodleType: inferred.noodleType,
                     vegType: inferred.vegType,
-                        soupType: inferred.soupType,
                     appliance: inferred.appliance,
                     sourceUrl: url,
                     sourceType: detectSource(url),
@@ -2587,21 +1984,13 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
             if (savedRecipes.length === 1 && !onlyRecipeIsEmpty) {
                 setSelectedId(savedRecipes[0].id);
                 setView("detail");
-                setConfirmDelete(false);
             }
             else if (onlyRecipeIsEmpty) {
                 // Instagram in particular often blocks the fetch from seeing
                 // the real caption at all — better to say so plainly than
                 // to silently leave someone with a title-only, empty recipe
-                // and no idea why. YouTube has its own distinct failure
-                // mode: the description text does exist, but it lives
-                // behind a "もっと見る" (show more) toggle and is loaded
-                // by client-side JS that the page-fetch may not run, so
-                // the reader often only sees the first line or two.
-                const isYouTube = /(?:^|\.)youtube\.com|(?:^|\.)youtu\.be/i.test(url);
-                setUrlImportNotice(isYouTube
-                    ? "材料・手順を読み取れませんでした。YouTubeの概要欄は「もっと見る」で隠れている部分をうまく読み取れないことが多いです。概要欄を開いた状態のスクリーンショットを撮って、下の「スクリーンショットから読み取る」で取り込み直してみてください。"
-                    : "材料・手順を読み取れませんでした。ページの本文が取得できなかった可能性があります。レシピは仮の状態で保存したので、開いて「テキストから」でキャプションを貼り付けるか、スクリーンショットで読み取り直してください。");
+                // and no idea why.
+                setUrlImportNotice("材料・手順を読み取れませんでした。ページの本文が取得できなかった可能性があります。レシピは仮の状態で保存したので、開いて「テキストから」でキャプションを貼り付けるか、スクリーンショットで読み取り直してください。");
                 setView("list");
             }
             else {
@@ -2627,24 +2016,8 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
         await removeRecipeRemote(id);
         setView("list");
     };
-    // Only ever a targeted update of the `favorite` field (in both
-    // recipes/ and recipe-index/), never a full-object overwrite via
-    // writeRecipe — `recipe` here is very often just the lightweight
-    // recipe-index summary (e.g. toggled from the list before the full
-    // record has ever been fetched), and writeRecipe(recipe) would
-    // silently wipe that recipe's ingredients/steps/memo/etc back down to
-    // nothing if it were missing from the object passed in.
     const toggleFavorite = async (recipe) => {
-        const next = !recipe.favorite;
-        try {
-            await Promise.all([
-                uref(`recipes/${recipe.id}/favorite`).set(next),
-                uref(`recipe-index/${recipe.id}/favorite`).set(next),
-            ]);
-        }
-        catch {
-            setSaveError("保存に失敗しました(通信環境を確認してください)。");
-        }
+        await writeRecipe({ ...recipe, favorite: !recipe.favorite });
     };
     const [confirmDelete, setConfirmDelete] = useState(false);
     const handleUpdateRecipe = async () => {
@@ -2654,7 +2027,6 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
         await writeRecipe(cleaned);
         setEditDraft(null);
         setView("detail");
-        setConfirmDelete(false);
     };
     const [favoriteOnly, setFavoriteOnly] = useState(false);
     const [viewMode, setViewMode] = useState(() => {
@@ -2691,9 +2063,6 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
         if (categoryFilter === "野菜料理" && vegTypeFilter) {
             list = list.filter((r) => (r.vegType || "その他") === vegTypeFilter);
         }
-        if (categoryFilter === "スープ・鍋" && soupTypeFilter) {
-            list = list.filter((r) => (r.soupType || "その他") === soupTypeFilter);
-        }
         if (applianceFilter) {
             list = list.filter((r) => r.appliance === applianceFilter);
         }
@@ -2707,23 +2076,17 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
                 r.meatType,
                 r.appliance,
                 ...(r.tags || []),
-                ...(r.ingredientNames || []),
+                ...(r.ingredients || []).map((i) => i.name),
             ]
                 .filter(Boolean)
                 .join(" ")
                 .toLowerCase();
             return hay.includes(q);
         });
-    }, [recipes, query, categoryFilter, meatTypeFilter, noodleTypeFilter, vegTypeFilter, soupTypeFilter, applianceFilter, favoriteOnly]);
+    }, [recipes, query, categoryFilter, meatTypeFilter, noodleTypeFilter, vegTypeFilter, applianceFilter, favoriteOnly]);
     const availableCategories = categoryOrder || DISH_CATEGORIES;
     const availableAppliances = applianceOrder || APPLIANCES;
-    // `selected` is the lightweight recipe-index summary (title, photo,
-    // category — always available instantly for the header/list). `full`
-    // merges in ingredients/steps/memo/etc once fullRecipe has loaded for
-    // this specific recipe; DetailView and the edit-init below need `full`,
-    // not `selected`, or they'd show/save an ingredients-less recipe.
     const selected = recipes.find((r) => r.id === selectedId);
-    const full = selected && fullRecipe && fullRecipe.id === selectedId ? { ...selected, ...fullRecipe } : selected;
     return (React.createElement("div", { style: {
             minHeight: "100vh",
             background: COLORS.paper,
@@ -2733,26 +2096,21 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
             justifyContent: "center",
             padding: "0",
         } },
-        cropQueue.length > 0 && (React.createElement(LazyCropOverlay, { src: cropQueue[cropIndex].url, index: cropIndex, total: cropQueue.length, onConfirm: handleCropConfirm, onUseFull: (rotation) => handleCropConfirm(null, rotation), onSkip: handleCropSkip, onAddMore: handleScreenshots })),
+        cropQueue.length > 0 && (React.createElement(LazyCropOverlay, { src: cropQueue[cropIndex].url, index: cropIndex, total: cropQueue.length, onConfirm: handleCropConfirm, onUseFull: () => handleCropConfirm(null), onSkip: handleCropSkip })),
         React.createElement("div", { style: {
                 width: "100%",
                 maxWidth: 520,
                 padding: "22px 18px 118px",
             } },
-            React.createElement(Header, { view: view, onBack: () => { setView(view === "detail" ? detailOrigin : "list"); setDetailOrigin("list"); resetAddForm(); setConfirmDelete(false); }, isFavorite: !!selected?.favorite, onToggleFavorite: () => selected && toggleFavorite(selected), editDisabled: fullRecipeLoading, onEdit: () => {
-                    // Guard against opening the editor before the full
-                    // record (ingredients/steps/etc — see the fullRecipe
-                    // fetch above) has actually loaded; editDisabled above
-                    // also greys out the button for the same reason, this
-                    // is just the belt-and-suspenders click guard.
-                    if (!full || fullRecipeLoading)
+            React.createElement(Header, { view: view, onBack: () => { setView(view === "detail" ? detailOrigin : "list"); setDetailOrigin("list"); resetAddForm(); setConfirmDelete(false); }, isFavorite: !!selected?.favorite, onToggleFavorite: () => selected && toggleFavorite(selected), onEdit: () => {
+                    if (!selected)
                         return;
                     // If only the 2nd photo slot is filled, shift it into the
                     // main slot so there's never an empty gap before a used one.
                     // Also guard against older/malformed records missing
                     // array fields entirely (e.g. an ingredients-less record
                     // from an earlier version) — DraftEditor assumes arrays.
-                    const normalized = { ...full };
+                    const normalized = { ...selected };
                     if (!Array.isArray(normalized.ingredients))
                         normalized.ingredients = [];
                     if (!Array.isArray(normalized.steps))
@@ -2766,33 +2124,20 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
                     setEditDraft(normalized);
                     setView("editRecipe");
                 }, confirmDelete: confirmDelete, onArmDelete: () => setConfirmDelete(true), onConfirmDelete: () => selected && handleDelete(selected.id), onCancelDelete: () => setConfirmDelete(false) }),
-            !loaded && (React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 } },
-                Array.from({ length: 6 }).map((_, i) => React.createElement(SkeletonGridCard, { key: i })))),
-            loaded && view === "list" && (React.createElement(ListView, { recipes: filtered, total: recipes.length, query: query, setQuery: setQuery, categoryFilter: categoryFilter, setCategoryFilter: setCategoryFilter, meatTypeFilter: meatTypeFilter, setMeatTypeFilter: setMeatTypeFilter, noodleTypeFilter: noodleTypeFilter, setNoodleTypeFilter: setNoodleTypeFilter, vegTypeFilter: vegTypeFilter, setVegTypeFilter: setVegTypeFilter, soupTypeFilter: soupTypeFilter, setSoupTypeFilter: setSoupTypeFilter, availableCategories: availableCategories, applianceFilter: applianceFilter, setApplianceFilter: setApplianceFilter, availableAppliances: availableAppliances, favoriteOnly: favoriteOnly, setFavoriteOnly: setFavoriteOnly, viewMode: viewMode, setViewMode: changeViewMode, onAdd: (mode = "url") => { setAddMode(mode); setView("add"); }, onSelect: (id) => { setSelectedId(id); setView("detail"); setConfirmDelete(false); }, onDeleteRecipe: handleDelete, notice: urlImportNotice, onDismissNotice: () => setUrlImportNotice("") })),
-            loaded && view === "calendar" && (React.createElement(LazyCalendarView, { recipes: recipes, mealPlan: mealPlan, onAddEntry: addMealPlanEntry, onRemoveEntry: removeMealPlanEntry, onSetDayEntries: setMealPlanEntries, onBack: () => setView("list"), onSelectRecipe: (id) => { setSelectedId(id); setDetailOrigin("calendar"); setView("detail"); setConfirmDelete(false); }, initialMode: calendarMode, onModeChange: setCalendarMode })),
-            loaded && view === "add" && (React.createElement(AddView, { inputUrl: inputUrl, setInputUrl: setInputUrl, inputText: inputText, setInputText: setInputText, extractError: extractError, onExtract: handleExtract, extracting: extracting, draft: draft, setDraft: setDraft, onSave: handleSaveDraft, onDiscard: () => setDraft(null), saveError: saveError, ocrRunning: ocrRunning, ocrProgress: ocrProgress, ocrError: ocrError, onScreenshots: handleScreenshots, urlImporting: urlImporting, urlImportError: urlImportError, onUrlImport: handleUrlImport, apiKey: apiKey, addMode: addMode, categoryOrder: categoryOrder, applianceOrder: applianceOrder })),
-            loaded && view === "detail" && selected && (React.createElement(DetailView, { recipe: full, loadingFull: fullRecipeLoading, onAddToShoppingList: addToShoppingList })),
-            loaded && view === "detail" && !selected && (React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, color: COLORS.inkSoft, padding: 24 } },
+            !loaded && (React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, color: COLORS.inkSoft, padding: 24 } },
                 React.createElement(Loader2, { size: 18, className: "spin" }),
                 React.createElement("span", null, "\u8AAD\u307F\u8FBC\u307F\u4E2D..."))),
+            loaded && view === "list" && (React.createElement(ListView, { recipes: filtered, total: recipes.length, query: query, setQuery: setQuery, categoryFilter: categoryFilter, setCategoryFilter: setCategoryFilter, meatTypeFilter: meatTypeFilter, setMeatTypeFilter: setMeatTypeFilter, noodleTypeFilter: noodleTypeFilter, setNoodleTypeFilter: setNoodleTypeFilter, vegTypeFilter: vegTypeFilter, setVegTypeFilter: setVegTypeFilter, availableCategories: availableCategories, applianceFilter: applianceFilter, setApplianceFilter: setApplianceFilter, availableAppliances: availableAppliances, favoriteOnly: favoriteOnly, setFavoriteOnly: setFavoriteOnly, viewMode: viewMode, setViewMode: changeViewMode, onAdd: (mode = "url") => { setAddMode(mode); setView("add"); }, onSelect: (id) => { setSelectedId(id); setView("detail"); setConfirmDelete(false); }, onDeleteRecipe: handleDelete, notice: urlImportNotice, onDismissNotice: () => setUrlImportNotice("") })),
+            loaded && view === "calendar" && (React.createElement(LazyCalendarView, { recipes: recipes, mealPlan: mealPlan, onAddEntry: addMealPlanEntry, onRemoveEntry: removeMealPlanEntry, onSetDayEntries: setMealPlanEntries, onBack: () => setView("list"), onSelectRecipe: (id) => { setSelectedId(id); setDetailOrigin("calendar"); setView("detail"); setConfirmDelete(false); } })),
+            loaded && view === "add" && (React.createElement(AddView, { inputUrl: inputUrl, setInputUrl: setInputUrl, inputText: inputText, setInputText: setInputText, extractError: extractError, onExtract: handleExtract, extracting: extracting, draft: draft, setDraft: setDraft, onSave: handleSaveDraft, onDiscard: () => setDraft(null), saveError: saveError, ocrRunning: ocrRunning, ocrProgress: ocrProgress, ocrError: ocrError, onScreenshots: handleScreenshots, urlImporting: urlImporting, urlImportError: urlImportError, onUrlImport: handleUrlImport, apiKey: apiKey, addMode: addMode, categoryOrder: categoryOrder, applianceOrder: applianceOrder })),
+            loaded && view === "detail" && selected && (React.createElement(DetailView, { recipe: selected, onAddToShoppingList: addToShoppingList })),
             loaded && view === "editRecipe" && editDraft && (React.createElement(DraftEditor, { draft: editDraft, setDraft: setEditDraft, onSave: handleUpdateRecipe, onDiscard: () => {
                     setEditDraft(null);
                     setView("detail");
                 }, saveError: saveError, mode: "edit", categoryOrder: categoryOrder, applianceOrder: applianceOrder }))),
         React.createElement("style", null, `
         .spin { animation: spin 1s linear infinite; }
-        .skeleton-shimmer { position: relative; overflow: hidden; }
-        .skeleton-shimmer::after {
-          content: ""; position: absolute; inset: 0;
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent);
-          animation: shimmer 1.4s infinite;
-        }
-        @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        @keyframes slideInRight { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: translateX(0); } }
-        @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .page-enter { animation: slideInRight 220ms ease; }
-        .sheet-enter { animation: fadeUp 200ms ease; }
         input, textarea { font-family: inherit; }
         button { font-family: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
         button:active { transform: scale(0.985); }
@@ -2801,12 +2146,8 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
         ::selection { background: ${COLORS.accent}55; }
       `)));
 }
-function Header({ view, onBack, isFavorite, onToggleFavorite, onEdit, editDisabled, confirmDelete, onArmDelete, onConfirmDelete, onCancelDelete }) {
-    // The calendar view has its own dedicated back button (in calendar.js),
-    // so this header's own "一覧へ" button would just be a second, redundant
-    // back control stacked right above it — skip rendering this header at
-    // all for that view.
-    return (React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 22, minHeight: 48 } }, view !== "list" && view !== "calendar" ? (React.createElement(React.Fragment, null,
+function Header({ view, onBack, isFavorite, onToggleFavorite, onEdit, confirmDelete, onArmDelete, onConfirmDelete, onCancelDelete }) {
+    return (React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 22, minHeight: 48 } }, view !== "list" ? (React.createElement(React.Fragment, null,
         React.createElement("button", { onClick: onBack, style: {
                 background: "none",
                 border: "none",
@@ -2826,12 +2167,12 @@ function Header({ view, onBack, isFavorite, onToggleFavorite, onEdit, editDisabl
             React.createElement("button", { onClick: onCancelDelete, style: { border: `1px solid ${COLORS.line}`, background: "none", color: COLORS.inkSoft, borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" } }, "\u30AD\u30E3\u30F3\u30BB\u30EB"))) : (React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 4 } },
             React.createElement("button", { onClick: onToggleFavorite, "aria-label": "\u30D6\u30C3\u30AF\u30DE\u30FC\u30AF", style: { background: isFavorite ? `${COLORS.accent}22` : "none", border: "none", borderRadius: 8, padding: 8, cursor: "pointer", display: "flex" } },
                 React.createElement(Bookmark, { size: 19, color: isFavorite ? COLORS.accent : COLORS.inkSoft })),
-            React.createElement("button", { onClick: onEdit, disabled: editDisabled, "aria-label": "\u7DE8\u96C6", style: { background: "none", border: "none", padding: 8, cursor: editDisabled ? "default" : "pointer", display: "flex", opacity: editDisabled ? 0.4 : 1 } },
+            React.createElement("button", { onClick: onEdit, "aria-label": "\u7DE8\u96C6", style: { background: "none", border: "none", padding: 8, cursor: "pointer", display: "flex" } },
                 React.createElement(Edit2, { size: 18, color: COLORS.inkSoft })),
             React.createElement("button", { onClick: onArmDelete, "aria-label": "\u524A\u9664", style: { background: "none", border: "none", padding: 8, cursor: "pointer", display: "flex" } },
                 React.createElement(Trash2, { size: 18, color: COLORS.inkSoft }))))))) : (React.createElement(React.Fragment, null,
         React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 3 } },
-            view !== "calendar" && React.createElement("div", { style: { fontSize: 10, letterSpacing: "0.18em", fontWeight: 700, color: COLORS.sage } }, "MY KITCHEN"),
+            React.createElement("div", { style: { fontSize: 10, letterSpacing: "0.18em", fontWeight: 700, color: COLORS.sage } }, "MY KITCHEN"),
             React.createElement("h1", { style: {
                     fontFamily: "'Noto Sans JP', sans-serif",
                     fontSize: 27,
@@ -2839,7 +2180,7 @@ function Header({ view, onBack, isFavorite, onToggleFavorite, onEdit, editDisabl
                     margin: 0,
                     letterSpacing: "-0.04em",
                     lineHeight: 1.18,
-                } }, view === "calendar" ? "献立カレンダー" : "レシピノート"))))));
+                } }, "\u30EC\u30B7\u30D4\u30CE\u30FC\u30C8"))))));
 }
 function groupByDishCategory(recipes) {
     const groups = {};
@@ -2874,7 +2215,7 @@ function groupByDishCategory(recipes) {
         return { cat, subGroups: null, items };
     });
 }
-function ListView({ recipes, total, query, setQuery, categoryFilter, setCategoryFilter, meatTypeFilter, setMeatTypeFilter, noodleTypeFilter, setNoodleTypeFilter, vegTypeFilter, setVegTypeFilter, soupTypeFilter, setSoupTypeFilter, availableCategories, applianceFilter, setApplianceFilter, availableAppliances, favoriteOnly, setFavoriteOnly, viewMode, setViewMode, onAdd, onSelect, onDeleteRecipe, notice, onDismissNotice, }) {
+function ListView({ recipes, total, query, setQuery, categoryFilter, setCategoryFilter, meatTypeFilter, setMeatTypeFilter, noodleTypeFilter, setNoodleTypeFilter, vegTypeFilter, setVegTypeFilter, availableCategories, applianceFilter, setApplianceFilter, availableAppliances, favoriteOnly, setFavoriteOnly, viewMode, setViewMode, onAdd, onSelect, onDeleteRecipe, notice, onDismissNotice, }) {
     useEffect(() => {
         if (!notice)
             return;
@@ -2884,11 +2225,11 @@ function ListView({ recipes, total, query, setQuery, categoryFilter, setCategory
     const [showQuickAdd, setShowQuickAdd] = useState(false);
     const [showApplianceFilter, setShowApplianceFilter] = useState(false);
     const quickAddItems = [
-        { label: "URLから追加", icon: Link2, mode: "url", hint: "レシピページを読み取ります" },
-        { label: "写真から追加", icon: GridIcon, mode: "image", hint: "スクショや保存した画像から" },
-        { label: "撮影して追加", icon: Camera, mode: "camera", hint: "レシピ本などを撮影" },
-        { label: "テキストから", icon: ClipboardPaste, mode: "text", hint: "SNSの投稿文やメモから" },
-        { label: "手動で入力", icon: Edit2, mode: "manual", hint: "自分でレシピを登録" },
+        { label: "URLから追加", icon: Link2, mode: "url" },
+        { label: "画像から追加", icon: GridIcon, mode: "image" },
+        { label: "撮影して追加", icon: Camera, mode: "camera" },
+        { label: "テキストから", icon: ClipboardPaste, mode: "text" },
+        { label: "手動で入力", icon: Edit2, mode: "manual" },
     ];
     return (React.createElement("div", { style: { paddingBottom: 24 } },
         notice && React.createElement("div", { onClick: onDismissNotice, style: {
@@ -2906,8 +2247,8 @@ function ListView({ recipes, total, query, setQuery, categoryFilter, setCategory
                     gap: 8,
                     background: "#fff",
                     borderRadius: 999,
-                    padding: "13px 16px",
-                    boxShadow: SHADOW.soft,
+                    padding: "11px 16px",
+                    boxShadow: "0 1px 4px rgba(46,42,36,0.06)",
                 } },
                 React.createElement(Search, { size: 16, color: COLORS.inkSoft, style: { flexShrink: 0 } }),
                 React.createElement("input", { value: query, onChange: (e) => setQuery(e.target.value), placeholder: "\u30EC\u30B7\u30D4\u3092\u691C\u7D22", style: {
@@ -2922,28 +2263,28 @@ function ListView({ recipes, total, query, setQuery, categoryFilter, setCategory
                     } })),
             React.createElement("button", { onClick: () => setViewMode(viewMode === "grid" ? "list" : "grid"), title: viewMode === "grid" ? "\u30EA\u30B9\u30C8\u8868\u793A\u306B\u5207\u308A\u66FF\u3048" : "\u30B0\u30EA\u30C3\u30C9\u8868\u793A\u306B\u5207\u308A\u66FF\u3048", "aria-label": "\u8868\u793A\u5207\u308A\u66FF\u3048", style: {
                     flexShrink: 0,
-                    width: 48,
-                    height: 48,
+                    width: 44,
+                    height: 44,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     background: "#fff",
                     border: "none",
                     borderRadius: "50%",
-                    boxShadow: SHADOW.soft,
+                    boxShadow: "0 1px 4px rgba(46,42,36,0.06)",
                     cursor: "pointer",
                 } }, viewMode === "grid" ? React.createElement(ListIcon, { size: 17, color: COLORS.inkSoft }) : React.createElement(GridIcon, { size: 17, color: COLORS.inkSoft })),
             React.createElement("button", { onClick: () => setFavoriteOnly((v) => !v), title: "\u30D6\u30C3\u30AF\u30DE\u30FC\u30AF\u3060\u3051\u8868\u793A", "aria-label": "\u30D6\u30C3\u30AF\u30DE\u30FC\u30AF\u3060\u3051\u8868\u793A", style: {
                     flexShrink: 0,
-                    width: 48,
-                    height: 48,
+                    width: 44,
+                    height: 44,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     background: favoriteOnly ? COLORS.accent : "#fff",
                     border: "none",
                     borderRadius: "50%",
-                    boxShadow: SHADOW.soft,
+                    boxShadow: "0 1px 4px rgba(46,42,36,0.06)",
                     cursor: "pointer",
                 } },
                 React.createElement(Bookmark, { size: 17, color: favoriteOnly ? "#fff" : COLORS.inkSoft }))),
@@ -3125,66 +2466,38 @@ function ListView({ recipes, total, query, setQuery, categoryFilter, setCategory
                     fontWeight: 700,
                     whiteSpace: "nowrap",
                 } }, vt))))),
-        categoryFilter === "スープ・鍋" && (React.createElement("div", { style: {
-                display: "flex",
-                gap: 8,
-                overflowX: "auto",
-                paddingBottom: 4,
-                marginBottom: 16,
-                marginTop: -8,
-                WebkitOverflowScrolling: "touch",
-            } },
-            React.createElement("button", { onClick: () => setSoupTypeFilter(null), style: {
-                    flexShrink: 0,
-                    fontSize: 11.5,
-                    padding: "6px 13px",
-                    borderRadius: 999,
-                    border: `1px solid ${!soupTypeFilter ? COLORS.sage : COLORS.line}`,
-                    background: !soupTypeFilter ? COLORS.sageSoft : "transparent",
-                    color: !soupTypeFilter ? COLORS.sage : COLORS.inkSoft,
-                    fontWeight: 700,
-                    whiteSpace: "nowrap",
-                } }, "\u3059\u3079\u3066\u306E\u30B9\u30FC\u30D7\u30FB\u9505"),
-            SOUP_TYPES.map((st) => (React.createElement("button", { key: st, onClick: () => setSoupTypeFilter(soupTypeFilter === st ? null : st), style: {
-                    flexShrink: 0,
-                    fontSize: 11.5,
-                    padding: "6px 13px",
-                    borderRadius: 999,
-                    border: `1px solid ${soupTypeFilter === st ? COLORS.sage : COLORS.line}`,
-                    background: soupTypeFilter === st ? COLORS.sageSoft : "transparent",
-                    color: soupTypeFilter === st ? COLORS.sage : COLORS.inkSoft,
-                    fontWeight: 700,
-                    whiteSpace: "nowrap",
-                } }, st))))),
         total === 0 ? (React.createElement(EmptyState, { onAdd: onAdd })) : recipes.length === 0 ? (React.createElement("p", { style: { color: COLORS.inkSoft, fontSize: 14, padding: "20px 4px" } }, query.trim() && categoryFilter
             ? `「${categoryFilter}」の中に「${query}」に一致するレシピが見つかりませんでした。`
             : query.trim()
                 ? `「${query}」に一致するレシピが見つかりませんでした。`
                 : `「${categoryFilter}」のレシピはまだありません。`)) : viewMode === "grid" ? (React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 } }, recipes.map((r) => (React.createElement(RecipeGridCard, { key: r.id, recipe: r, onClick: () => onSelect(r.id) }))))) : (React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10 } }, recipes.map((r) => (React.createElement(RecipeListCard, { key: r.id, recipe: r, onClick: () => onSelect(r.id) }))))),
         showQuickAdd && React.createElement("div", { onClick: () => setShowQuickAdd(false), style: {
-                position: "fixed", inset: 0, background: "rgba(56,54,49,0.32)", zIndex: 80,
-                display: "flex", alignItems: "flex-end",
-            } },
-            React.createElement("div", { onClick: (e) => e.stopPropagation(), style: {
-                    width: "100%", background: COLORS.paperCard, borderTopLeftRadius: RADIUS.card, borderTopRightRadius: RADIUS.card,
-                    padding: "10px 16px calc(20px + env(safe-area-inset-bottom, 0px))", boxShadow: SHADOW.lifted,
-                } },
-                React.createElement("div", { style: { width: 36, height: 4, borderRadius: 999, background: COLORS.line, margin: "6px auto 14px" } }),
-                React.createElement("h2", { style: { fontSize: 17, fontWeight: 800, margin: "0 0 10px", color: COLORS.ink } }, "レシピを追加"),
-                quickAddItems.map((item) => {
-                    const Icon = item.icon;
-                    return React.createElement("button", { key: item.label, onClick: () => { setShowQuickAdd(false); onAdd(item.mode); }, style: {
-                            width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "12px 6px",
-                            border: "none", background: "none", textAlign: "left", cursor: "pointer",
-                        } },
-                        React.createElement("div", { style: {
-                                width: 42, height: 42, borderRadius: RADIUS.button, background: COLORS.sageSoft,
-                                display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                            } }, React.createElement(Icon, { size: 19, color: COLORS.sage })),
-                        React.createElement("div", null,
-                            React.createElement("p", { style: { fontSize: 15, fontWeight: 700, color: COLORS.ink, margin: 0 } }, item.label),
-                            item.hint && React.createElement("p", { style: { fontSize: 12, color: COLORS.inkSoft, margin: "2px 0 0" } }, item.hint)));
-                }))),
+                position: "fixed", inset: 0, background: "rgba(32,35,31,0.20)", zIndex: 80
+            } }),
+        showQuickAdd && React.createElement("div", { style: {
+                position: "fixed",
+                right: "max(20px, calc(50% - 238px))",
+                bottom: "calc(154px + env(safe-area-inset-bottom, 0px))",
+                zIndex: 90,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "flex-end",
+                gap: 10,
+            } }, quickAddItems.map((item) => {
+                const Icon = item.icon;
+                return React.createElement("button", { key: item.label, onClick: () => { setShowQuickAdd(false); onAdd(item.mode); }, style: {
+                        border: "none", background: "transparent", padding: 0, display: "flex", alignItems: "center", gap: 10
+                    } },
+                    React.createElement("span", { style: {
+                            background: "rgba(255,255,255,0.98)", color: COLORS.ink, borderRadius: 12, padding: "8px 12px",
+                            fontSize: 13, fontWeight: 700, boxShadow: "0 6px 22px rgba(32,35,31,0.12)", whiteSpace: "nowrap"
+                        } }, item.label),
+                    React.createElement("span", { style: {
+                            width: 48, height: 48, borderRadius: "50%", background: COLORS.accent, color: "#fff",
+                            display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 8px 24px rgba(67,84,69,0.28)"
+                        } }, React.createElement(Icon, { size: 21 }))
+                );
+            })),
         React.createElement("button", { onClick: () => setShowQuickAdd((v) => !v), style: {
                 position: "fixed",
                 right: "max(20px, calc(50% - 238px))",
@@ -3192,13 +2505,13 @@ function ListView({ recipes, total, query, setQuery, categoryFilter, setCategory
                 width: 58,
                 height: 58,
                 borderRadius: "50%",
-                background: COLORS.sage,
+                background: COLORS.accent,
                 color: "#fff",
                 border: "none",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                boxShadow: SHADOW.lifted,
+                boxShadow: "0 10px 28px rgba(67,84,69,0.28)",
                 zIndex: 100,
                 transform: showQuickAdd ? "rotate(45deg)" : "rotate(0deg)",
                 transition: "transform 180ms ease",
@@ -3246,197 +2559,47 @@ function LazyCalendarView(props) {
     }
     return React.createElement(Comp, props);
 }
-// Same on-demand loading as LazyCalendarView, for the プリント (school/PTA
-// paper photos) tab — its own file, prints.js.
-function LazyPrintsView(props) {
-    const [Comp, setComp] = useState(null);
-    useEffect(() => {
-        let cancelled = false;
-        import("./prints.js").then((m) => {
-            if (!cancelled)
-                setComp(() => m.PrintsView);
-        });
-        return () => { cancelled = true; };
-    }, []);
-    if (!Comp) {
-        return React.createElement("div", { style: { padding: "60px 20px", textAlign: "center", color: COLORS.inkSoft, fontSize: 13.5 } }, "\u8AAD\u307F\u8FBC\u307F\u4E2D\u2026");
-    }
-    return React.createElement(Comp, props);
-}
 function EmptyState({ onAdd }) {
     return (React.createElement("div", { style: {
             textAlign: "center",
-            padding: "56px 24px",
+            padding: "48px 20px",
             color: COLORS.inkSoft,
         } },
-        React.createElement("div", { style: {
-                width: 64, height: 64, borderRadius: "50%", background: COLORS.soft,
-                display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px",
-            } }, React.createElement(BookOpen, { size: 26, color: COLORS.sage })),
-        React.createElement("h3", { style: { fontSize: 17, fontWeight: 800, color: COLORS.ink, margin: "0 0 8px" } }, "お気に入りのレシピを集めよう"),
-        React.createElement("p", { style: { fontSize: 13.5, lineHeight: 1.8, margin: "0 0 20px" } },
-            "Web\u3084SNS\u3067\u898B\u3064\u3051\u305F\u30EC\u30B7\u30D4\u3082\u3001",
+        React.createElement(Instagram, { size: 32, color: COLORS.line, style: { marginBottom: 10 } }),
+        React.createElement("p", { style: { fontSize: 14, lineHeight: 1.7, margin: "0 0 16px" } },
+            "\u307E\u3060\u30EC\u30B7\u30D4\u304C\u3042\u308A\u307E\u305B\u3093\u3002",
             React.createElement("br", null),
-            "\u5199\u771F\u304B\u3089\u8AAD\u307F\u53D6\u3063\u305F\u30EC\u30B7\u30D4\u3082\u3001",
+            "Instagram \u3084 X \u306E\u6295\u7A3F\u306E\u30AD\u30E3\u30D7\u30B7\u30E7\u30F3\u6587\u3092\u30B3\u30D4\u30FC\u3057\u3066\u3001",
             React.createElement("br", null),
-            "\u3053\u3053\u306B\u307E\u3068\u3081\u3066\u4FDD\u5B58\u3067\u304D\u307E\u3059\u3002"),
+            "\u8CBC\u308A\u4ED8\u3051\u308B\u3068\u30EC\u30B7\u30D4\u5F62\u5F0F\u306B\u6574\u7406\u3055\u308C\u307E\u3059\u3002"),
         React.createElement("button", { onClick: onAdd, style: {
-                background: COLORS.sage,
+                background: COLORS.accent,
                 color: "#fff",
                 border: "none",
-                borderRadius: RADIUS.button,
-                padding: "12px 24px",
+                borderRadius: 12,
+                padding: "10px 20px",
                 fontWeight: 700,
                 fontSize: 14,
-                cursor: "pointer",
             } }, "\u6700\u521D\u306E\u30EC\u30B7\u30D4\u3092\u8FFD\u52A0")));
-}
-// Standalone component (not inlined) specifically so this stays simple to
-// verify — a shimmering placeholder shown in a 2-column grid while the
-// recipe list loads, instead of a bare spinner.
-// Shown once on first launch only (gated by localStorage in App below), a
-// standalone component kept simple/shallow on purpose so it's easy to
-// verify — same reasoning as SkeletonGridCard above.
-const ONBOARDING_PAGES = [
-    { title: "見つけたレシピを、\nひとつの場所に", body: "WebやSNSのレシピをまとめて保存。" },
-    { title: "写真からでも\nかんたん登録", body: "スクリーンショットやレシピ本から読み取れます。" },
-    { title: "献立から\n買い物まで", body: "作りたい料理を決めたら、材料を買い物リストへ。" },
-];
-// Standalone component (like SkeletonGridCard/OnboardingFlow above) —
-// colorful shortcut cards to each feature, in the spirit of the reference
-// mockups, without needing to lift recipes/mealPlan/todos/shopping state
-// up out of their own components just for a preview. A safer starting
-// point than a fully "live data" dashboard; live previews per card is a
-// reasonable next step once this base is confirmed working.
-// A small colored circle behind the icon, only lit up in that item's own
-// feature color when active — the "cute badge" look from the reference
-// mockups, applied to the bottom nav. Its own component (like the other
-// standalone pieces above) so the six nav buttons below don't each need
-// their own copy of this markup.
-function NavIcon({ icon: Icon, active, color, soft }) {
-    return React.createElement("div", { style: {
-            width: 30, height: 30, borderRadius: "50%",
-            background: active ? soft : "transparent",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            transition: "background 0.15s",
-        } }, React.createElement(Icon, { size: 18, color: active ? color : COLORS.inkSoft }));
-}
-function HomeView({ myName, onNavigate }) {
-    const hour = new Date().getHours();
-    const greeting = hour < 11 ? "おはようございます" : hour < 17 ? "こんにちは" : "こんばんは";
-    // Each preview is its own small, read-only listener scoped to this
-    // component — kept deliberately separate from (and not touching) the
-    // existing recipes/mealPlan/todos/shopping/prints state that already
-    // lives inside their own tabs, so this stays additive rather than a
-    // restructuring of how those tabs already work.
-    const [todayMeals, setTodayMeals] = useState([]);
-    const [todoPreview, setTodoPreview] = useState([]);
-    const [shoppingPreview, setShoppingPreview] = useState([]);
-    const [printsPreview, setPrintsPreview] = useState([]);
-    useEffect(() => {
-        const todayStr = new Date().toISOString().slice(0, 10);
-        const mealRef = uref(`meal-plan/${todayStr}`);
-        const mealCb = mealRef.on("value", (snap) => setTodayMeals(snap.val() || []));
-        const todoRef = uref("todos");
-        const todoCb = todoRef.on("value", (snap) => {
-            const val = Object.values(snap.val() || {});
-            setTodoPreview(val.filter((t) => !t.done).slice(0, 3));
-        });
-        const shoppingRef = uref("shopping");
-        const shoppingCb = shoppingRef.on("value", (snap) => {
-            const val = Object.values(snap.val() || {});
-            setShoppingPreview(val.filter((t) => !t.done).slice(0, 3));
-        });
-        const printsRef = uref("print-index");
-        const printsCb = printsRef.on("value", (snap) => {
-            const val = Object.values(snap.val() || {}).sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
-            setPrintsPreview(val.slice(0, 2));
-        });
-        return () => {
-            mealRef.off("value", mealCb);
-            todoRef.off("value", todoCb);
-            shoppingRef.off("value", shoppingCb);
-            printsRef.off("value", printsCb);
-        };
-    }, []);
-    const previewFor = { calendar: todayMeals.map((m) => m.title).filter(Boolean), todo: todoPreview.map((t) => t.text).filter(Boolean), shopping: shoppingPreview.map((t) => t.text).filter(Boolean), prints: printsPreview.map((p) => p.title).filter(Boolean) };
-    const cards = [
-        { key: "recipe", label: "レシピ", desc: "保存したレシピを見る", icon: BookOpen, color: COLORS.featureRecipe, soft: COLORS.featureRecipeSoft },
-        { key: "calendar", label: "献立", desc: "今週の献立を立てる", icon: CalendarIcon, color: COLORS.featureRecipe, soft: COLORS.featureRecipeSoft },
-        { key: "todo", label: "ToDo", desc: "今日のやることを見る", icon: Check, color: COLORS.featureTodo, soft: COLORS.featureTodoSoft },
-        { key: "shopping", label: "買い物", desc: "買い物リストを見る", icon: ClipboardPaste, color: COLORS.featureShopping, soft: COLORS.featureShoppingSoft },
-        { key: "prints", label: "プリント", desc: "学校のプリントを見る", icon: FileText, color: COLORS.featurePrints, soft: COLORS.featurePrintsSoft },
-    ];
-    return React.createElement("div", { style: { padding: "20px 16px 24px" } },
-        React.createElement("p", { style: { fontSize: 13, color: COLORS.inkSoft, margin: "0 0 3px" } }, `${greeting}${myName ? `、${myName}さん` : ""}`),
-        React.createElement("h1", { style: { fontSize: 24, fontWeight: 800, color: COLORS.ink, margin: "0 0 20px" } }, "今日もすっきり暮らそう"),
-        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 } },
-            cards.map((c) => React.createElement("button", { key: c.key, onClick: () => onNavigate(c.key), style: {
-                    textAlign: "left", border: "none", background: COLORS.paperCard, borderRadius: RADIUS.card,
-                    padding: "16px 14px", boxShadow: SHADOW.soft, cursor: "pointer", display: "flex", flexDirection: "column", gap: 10,
-                } },
-                React.createElement("div", { style: {
-                        width: 40, height: 40, borderRadius: RADIUS.button, background: c.soft,
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                    } }, React.createElement(c.icon, { size: 19, color: c.color })),
-                React.createElement("div", null,
-                    React.createElement("p", { style: { fontSize: 14.5, fontWeight: 800, color: COLORS.ink, margin: "0 0 2px" } }, c.label),
-                    React.createElement("p", { style: { fontSize: 11.5, color: COLORS.inkSoft, margin: "0 0 6px" } }, c.desc)),
-                (previewFor[c.key] || []).length > 0 && React.createElement("div", { style: { borderTop: `1px solid ${COLORS.line}`, paddingTop: 8, display: "flex", flexDirection: "column", gap: 3 } },
-                    previewFor[c.key].map((text, i) => React.createElement("p", { key: i, style: { fontSize: 11, color: COLORS.inkSoft, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, `・${text}`)))))));
-}
-function OnboardingFlow({ onFinish }) {
-    const [page, setPage] = useState(0);
-    const isLast = page === ONBOARDING_PAGES.length - 1;
-    const current = ONBOARDING_PAGES[page];
-    return React.createElement("div", { style: {
-            position: "fixed", inset: 0, zIndex: 200, background: COLORS.paper,
-            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-            padding: "24px", textAlign: "center",
-        } },
-        React.createElement("div", { style: {
-                width: 72, height: 72, borderRadius: "50%", background: COLORS.sageSoft,
-                display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 24,
-            } }, React.createElement(BookOpen, { size: 30, color: COLORS.sage })),
-        React.createElement("h2", { style: { fontSize: 22, fontWeight: 800, color: COLORS.ink, margin: "0 0 12px", whiteSpace: "pre-line", lineHeight: 1.4 } }, current.title),
-        React.createElement("p", { style: { fontSize: 14.5, color: COLORS.inkSoft, lineHeight: 1.8, margin: "0 0 32px", maxWidth: 280 } }, current.body),
-        React.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 32 } },
-            ONBOARDING_PAGES.map((_, i) => React.createElement("span", { key: i, style: {
-                    width: i === page ? 20 : 6, height: 6, borderRadius: 999,
-                    background: i === page ? COLORS.sage : COLORS.line, transition: "width 0.2s",
-                } }))),
-        React.createElement("button", { onClick: () => isLast ? onFinish() : setPage((p) => p + 1), style: {
-                width: "100%", maxWidth: 320, background: COLORS.sage, color: "#fff", border: "none",
-                borderRadius: RADIUS.button, padding: "14px 0", fontWeight: 700, fontSize: 15, cursor: "pointer",
-            } }, isLast ? "はじめる" : "次へ"),
-        !isLast && React.createElement("button", { onClick: onFinish, style: {
-                marginTop: 14, background: "none", border: "none", color: COLORS.inkSoft, fontSize: 13, cursor: "pointer",
-            } }, "スキップ"));
-}
-function SkeletonGridCard() {
-    return React.createElement("div", { style: { borderRadius: RADIUS.card, overflow: "hidden", background: COLORS.paperCard, boxShadow: SHADOW.soft } },
-        React.createElement("div", { className: "skeleton-shimmer", style: { width: "100%", aspectRatio: "4 / 3", background: COLORS.chipBg } }),
-        React.createElement("div", { style: { padding: "12px 13px 14px" } },
-            React.createElement("div", { className: "skeleton-shimmer", style: { height: 13, width: "80%", borderRadius: 5, background: COLORS.chipBg } })));
 }
 function RecipeGridCard({ recipe, onClick }) {
     return (React.createElement("div", { onClick: onClick, style: {
-            borderRadius: RADIUS.card,
+            borderRadius: 22,
             overflow: "hidden",
-            background: COLORS.paperCard,
-            boxShadow: SHADOW.soft,
+            background: "#fff",
+            boxShadow: "0 8px 26px rgba(32,35,31,0.075)",
             cursor: "pointer",
         } },
         React.createElement("div", { style: {
                 width: "100%",
-                aspectRatio: "4 / 3",
+                aspectRatio: "4 / 5",
                 background: COLORS.chipBg,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-            } }, (recipe.imageUrl || recipe.imageUrl2 || recipe.imageUrl3) ? (React.createElement("img", { src: recipe.imageUrl || recipe.imageUrl2 || recipe.imageUrl3, alt: "", onError: (e) => {
+            } }, (recipe.imageUrl || recipe.imageUrl2) ? (React.createElement("img", { src: recipe.imageUrl || recipe.imageUrl2, alt: "", onError: (e) => {
                 e.target.style.display = "none";
-            }, style: { width: "100%", height: "100%", objectFit: "cover" } })) : (React.createElement(BookOpen, { size: 22, color: COLORS.inkLight }))),
+            }, style: { width: "100%", height: "100%", objectFit: "cover" } })) : (React.createElement("span", { style: { fontSize: 11, color: COLORS.inkSoft, opacity: 0.6 } }, "No Photo"))),
         React.createElement("div", { style: { padding: "12px 13px 14px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 6 } },
             React.createElement("h3", { style: {
                     fontFamily: "'Noto Sans JP', sans-serif",
@@ -3450,16 +2613,16 @@ function RecipeGridCard({ recipe, onClick }) {
                     WebkitBoxOrient: "vertical",
                     overflow: "hidden",
                 } }, recipe.title || "無題のレシピ"),
-            recipe.favorite && React.createElement(Bookmark, { size: 14, color: COLORS.terracotta, style: { flexShrink: 0, marginTop: 2, fill: COLORS.terracotta } }))));
+            recipe.favorite && React.createElement(Bookmark, { size: 14, color: COLORS.accent, style: { flexShrink: 0, marginTop: 2 } }))));
 }
 function RecipeListCard({ recipe, onClick }) {
     return (React.createElement("div", { onClick: onClick, style: {
             display: "flex",
             alignItems: "center",
-            borderRadius: RADIUS.cardSmall,
+            borderRadius: 16,
             overflow: "hidden",
-            background: COLORS.paperCard,
-            boxShadow: SHADOW.soft,
+            background: "#fff",
+            boxShadow: "0 1px 6px rgba(46,42,36,0.08)",
             cursor: "pointer",
         } },
         React.createElement("div", { style: {
@@ -3470,9 +2633,9 @@ function RecipeListCard({ recipe, onClick }) {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-            } }, (recipe.imageUrl || recipe.imageUrl2 || recipe.imageUrl3) ? (React.createElement("img", { src: recipe.imageUrl || recipe.imageUrl2 || recipe.imageUrl3, alt: "", onError: (e) => {
+            } }, (recipe.imageUrl || recipe.imageUrl2) ? (React.createElement("img", { src: recipe.imageUrl || recipe.imageUrl2, alt: "", onError: (e) => {
                 e.target.style.display = "none";
-            }, style: { width: "100%", height: "100%", objectFit: "cover" } })) : (React.createElement(BookOpen, { size: 17, color: COLORS.inkLight }))),
+            }, style: { width: "100%", height: "100%", objectFit: "cover" } })) : (React.createElement("span", { style: { fontSize: 9.5, color: COLORS.inkSoft, opacity: 0.6 } }, "No Photo"))),
         React.createElement("div", { style: { flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "10px 14px" } },
             React.createElement("h3", { style: {
                     fontFamily: "'Noto Sans JP', sans-serif",
@@ -3482,7 +2645,7 @@ function RecipeListCard({ recipe, onClick }) {
                     lineHeight: 1.4,
                     color: COLORS.ink,
                 } }, recipe.title || "無題のレシピ"),
-            recipe.favorite && React.createElement(Bookmark, { size: 15, color: COLORS.terracotta, style: { flexShrink: 0, fill: COLORS.terracotta } }))));
+            recipe.favorite && React.createElement(Bookmark, { size: 15, color: COLORS.accent, style: { flexShrink: 0 } }))));
 }
 function JinaKeySettings({ jinaApiKey, saveJinaApiKey }) {
     const [value, setValue] = useState(jinaApiKey || "");
@@ -3579,7 +2742,7 @@ function AddView({ inputUrl, setInputUrl, inputText, setInputText, extractError,
     const cameraPickerRef = useRef(null);
     useEffect(() => {
         if (addMode === "manual" && !draft) {
-            setDraft({ title: "", servings: "", ingredients: [], steps: [], tags: [], memo: "", dishCategory: "その他", meatType: null, noodleType: null, vegType: null, soupType: null, appliance: null, sourceUrl: "", sourceType: "other", imageUrl: "", imageUrl2: "", imageUrl3: "" });
+            setDraft({ title: "", servings: "", ingredients: [], steps: [], tags: [], memo: "", dishCategory: "その他", meatType: null, noodleType: null, vegType: null, appliance: null, sourceUrl: "", sourceType: "other", imageUrl: "", imageUrl2: "" });
         } else if (addMode === "image") {
             setTimeout(() => imagePickerRef.current && imagePickerRef.current.click(), 80);
         } else if (addMode === "camera") {
@@ -3604,7 +2767,7 @@ function AddView({ inputUrl, setInputUrl, inputText, setInputText, extractError,
             React.createElement("div", { style: { fontSize: 11.5, lineHeight: 1.55, color: COLORS.inkSoft, marginTop: 4 } },
                 addMode === "url" ? "レシピページのURLを貼り付けると、内容を自動で読み取ります。" :
                 addMode === "text" ? "SNSのキャプションやメモをそのまま貼り付けてOK。" :
-                "読み取った内容はそのまま保存されます。保存後に内容を直せます。")
+                "読み取った内容は、保存する前に確認・編集できます。")
         ),
         React.createElement("input", { ref: imagePickerRef, type: "file", accept: "image/*", multiple: true, onChange: (e) => { onScreenshots(e.target.files); e.target.value = ""; }, style: { display: "none" } }),
         React.createElement("input", { ref: cameraPickerRef, type: "file", accept: "image/*", capture: "environment", onChange: (e) => { onScreenshots(e.target.files); e.target.value = ""; }, style: { display: "none" } }),
@@ -3811,7 +2974,7 @@ function DraftEditor({ draft, setDraft, onSave, onDiscard, saveError, mode = "cr
     const [categoryManual, setCategoryManual] = useState(false);
     const [pendingPhotoFile, setPendingPhotoFile] = useState(null);
     const [editingExistingPhoto, setEditingExistingPhoto] = useState(false);
-    const [photoSlot, setPhotoSlot] = useState(1); // 1 | 2 | 3 — which photo slot is being added/edited
+    const [photoSlot, setPhotoSlot] = useState(1); // 1 | 2 — which of the two photo slots is being added/edited
     const update = (patch) => setDraft({ ...draft, ...patch });
     const updateTitle = (value) => {
         if (categoryManual) {
@@ -3819,7 +2982,7 @@ function DraftEditor({ draft, setDraft, onSave, onDiscard, saveError, mode = "cr
         }
         else {
             const inferred = inferDishCategory(value, draft.ingredients);
-            update({ title: value, dishCategory: inferred.dishCategory, meatType: inferred.meatType, noodleType: inferred.noodleType, vegType: inferred.vegType, soupType: inferred.soupType });
+            update({ title: value, dishCategory: inferred.dishCategory, meatType: inferred.meatType, noodleType: inferred.noodleType, vegType: inferred.vegType });
         }
     };
     const updateDishCategory = (value) => {
@@ -3829,7 +2992,6 @@ function DraftEditor({ draft, setDraft, onSave, onDiscard, saveError, mode = "cr
             meatType: value === "肉料理" ? draft.meatType || "その他" : null,
             noodleType: value === "麺類" ? draft.noodleType || "その他" : null,
             vegType: value === "野菜料理" ? draft.vegType || "その他" : null,
-            soupType: value === "スープ・鍋" ? draft.soupType || "その他" : null,
         });
     };
     const updateMeatType = (value) => {
@@ -3843,10 +3005,6 @@ function DraftEditor({ draft, setDraft, onSave, onDiscard, saveError, mode = "cr
     const updateVegType = (value) => {
         setCategoryManual(true);
         update({ vegType: value });
-    };
-    const updateSoupType = (value) => {
-        setCategoryManual(true);
-        update({ soupType: value });
     };
     // Changing the servings count rescales every ingredient amount from the
     // current base, then that new count becomes the base for next time.
@@ -3914,56 +3072,54 @@ function DraftEditor({ draft, setDraft, onSave, onDiscard, saveError, mode = "cr
             )),
         React.createElement("label", { style: fieldLabelStyle }, "\u6599\u7406\u540D"),
         React.createElement("input", { value: draft.title, onChange: (e) => updateTitle(e.target.value), style: inputStyle }),
-        React.createElement("label", { style: fieldLabelStyle }, "\u5199\u771F\uFF08\u6700\u59273\u679A\uFF09"),
-        React.createElement("div", { style: { position: "relative", marginBottom: 24 } },
-            React.createElement("div", { style: { display: "flex", alignItems: "flex-start", gap: 0 } },
-                [1, 2, 3].map((slot) => {
-                    const field = slot === 1 ? "imageUrl" : slot === 2 ? "imageUrl2" : "imageUrl3";
-                    const url = draft[field];
-                    return React.createElement(React.Fragment, { key: slot },
-                        url ? React.createElement("div", { style: { position: "relative", width: 92, height: 92, flexShrink: 0 } },
-                            React.createElement("img", { src: url, alt: "", onClick: () => { setPhotoSlot(slot); setEditingExistingPhoto(true); }, onError: (e) => {
-                                    e.target.style.display = "none";
-                                }, style: {
-                                    width: "100%",
-                                    height: "100%",
-                                    objectFit: "cover",
-                                    borderRadius: 12,
-                                    border: `1px solid ${COLORS.line}`,
-                                    display: "block",
-                                    cursor: "pointer",
-                                } }),
-                            React.createElement("div", { style: {
-                                    position: "absolute", left: 4, bottom: 4, width: 22, height: 22, borderRadius: 11,
-                                    background: "rgba(32,35,31,0.55)", display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none"
-                                } }, React.createElement(Edit2, { size: 11, color: "#fff" })),
-                            React.createElement("button", { onClick: () => update({ [field]: "" }), style: {
-                                    position: "absolute",
-                                    top: -6,
-                                    right: -6,
-                                    background: COLORS.plum,
-                                    border: "2px solid #fff",
-                                    borderRadius: 999,
-                                    width: 24,
-                                    height: 24,
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                }, "aria-label": "\u5199\u771F\u3092\u524A\u9664" },
-                                React.createElement(X, { size: 13, color: "#fff" })))
-                            : React.createElement("label", { style: {
-                                    width: 92,
-                                    height: 92,
-                                    flexShrink: 0,
-                                    borderRadius: 12,
-                                    border: `1.5px dashed ${COLORS.accent}`,
-                                    marginLeft: slot > 1 ? 6 : 0,
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    cursor: "pointer",
-                                } },
-                                React.createElement(Plus, { size: 26, color: COLORS.accent }),
+        React.createElement("label", { style: fieldLabelStyle }, "\u5199\u771F\uFF08\u6700\u59272\u679A\uFF09"),
+        React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 16 } },
+            [1, 2].map((slot) => {
+                const field = slot === 1 ? "imageUrl" : "imageUrl2";
+                const url = draft[field];
+                return React.createElement(React.Fragment, { key: slot },
+                    url ? React.createElement("div", { style: { position: "relative", width: 96, height: 96, flexShrink: 0 } },
+                        React.createElement("img", { src: url, alt: "", onClick: () => { setPhotoSlot(slot); setEditingExistingPhoto(true); }, onError: (e) => {
+                                e.target.style.display = "none";
+                            }, style: {
+                                width: "100%",
+                                height: "100%",
+                                objectFit: "cover",
+                                borderRadius: 12,
+                                border: `1px solid ${COLORS.line}`,
+                                display: "block",
+                                cursor: "pointer",
+                            } }),
+                        React.createElement("div", { style: {
+                                position: "absolute", left: 4, bottom: 4, width: 22, height: 22, borderRadius: 11,
+                                background: "rgba(32,35,31,0.55)", display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none"
+                            } }, React.createElement(Edit2, { size: 11, color: "#fff" })),
+                        React.createElement("button", { onClick: () => update({ [field]: "" }), style: {
+                                position: "absolute",
+                                top: -6,
+                                right: -6,
+                                background: COLORS.plum,
+                                border: "2px solid #fff",
+                                borderRadius: 999,
+                                width: 24,
+                                height: 24,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                            }, "aria-label": "\u5199\u771F\u3092\u524A\u9664" },
+                            React.createElement(X, { size: 13, color: "#fff" })))
+                        : React.createElement("label", { style: {
+                                width: 96,
+                                height: 96,
+                                flexShrink: 0,
+                                borderRadius: 12,
+                                border: `1.5px dashed ${COLORS.accent}`,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                cursor: "pointer",
+                            } },
+                            React.createElement(Plus, { size: 26, color: COLORS.accent }),
                             React.createElement("input", { type: "file", accept: "image/*", style: { display: "none" }, onChange: (e) => {
                                     const file = e.target.files?.[0];
                                     e.target.value = "";
@@ -3972,38 +3128,12 @@ function DraftEditor({ draft, setDraft, onSave, onDiscard, saveError, mode = "cr
                                     setPhotoSlot(slot);
                                     setPendingPhotoFile(file);
                                 } })));
-                })),
-            // Swap buttons float below the seam between two adjacent
-            // photos (absolutely positioned against the row, not inline in
-            // the flex flow) — each photo is 92px wide with no gap between
-            // them, so the seam after photo N sits at x = 92*N.
-            draft.imageUrl && draft.imageUrl2 && React.createElement("button", {
-                onClick: () => update({ imageUrl: draft.imageUrl2, imageUrl2: draft.imageUrl }),
-                title: "\u5199\u771F\u306E\u9806\u756A\u3092\u5165\u308C\u66FF\u3048\u308B",
-                style: {
-                    position: "absolute", top: 86, left: 92 - 14,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    width: 28, height: 28, borderRadius: 999, zIndex: 1,
-                    border: `1px solid ${COLORS.line}`, background: "#fff", color: COLORS.inkSoft, cursor: "pointer",
-                    boxShadow: "0 2px 6px rgba(45,42,36,0.12)",
-                },
-            }, React.createElement(Repeat, { size: 13 })),
-            draft.imageUrl2 && draft.imageUrl3 && React.createElement("button", {
-                onClick: () => update({ imageUrl2: draft.imageUrl3, imageUrl3: draft.imageUrl2 }),
-                title: "\u5199\u771F\u306E\u9806\u756A\u3092\u5165\u308C\u66FF\u3048\u308B",
-                style: {
-                    position: "absolute", top: 86, left: 92 * 2 - 14,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    width: 28, height: 28, borderRadius: 999, zIndex: 1,
-                    border: `1px solid ${COLORS.line}`, background: "#fff", color: COLORS.inkSoft, cursor: "pointer",
-                    boxShadow: "0 2px 6px rgba(45,42,36,0.12)",
-                },
-            }, React.createElement(Repeat, { size: 13 }))),
+            })),
         (pendingPhotoFile || editingExistingPhoto) && React.createElement(LazyPhotoPositionEditor, {
             file: pendingPhotoFile || undefined,
-            source: !pendingPhotoFile && editingExistingPhoto ? draft[photoSlot === 3 ? "imageUrl3" : photoSlot === 2 ? "imageUrl2" : "imageUrl"] : undefined,
+            source: !pendingPhotoFile && editingExistingPhoto ? draft[photoSlot === 2 ? "imageUrl2" : "imageUrl"] : undefined,
             onCancel: () => { setPendingPhotoFile(null); setEditingExistingPhoto(false); },
-            onConfirm: (dataUrl) => { update({ [photoSlot === 3 ? "imageUrl3" : photoSlot === 2 ? "imageUrl2" : "imageUrl"]: dataUrl }); setPendingPhotoFile(null); setEditingExistingPhoto(false); },
+            onConfirm: (dataUrl) => { update({ [photoSlot === 2 ? "imageUrl2" : "imageUrl"]: dataUrl }); setPendingPhotoFile(null); setEditingExistingPhoto(false); },
         }),
         React.createElement("label", { style: fieldLabelStyle }, "\u4EBA\u6570\uFF08\u4F55\u4EBA\u5206\u306E\u5206\u91CF\u304B\u3092\u8A18\u9332\u3057\u307E\u3059\uFF09"),
         React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 14 } },
@@ -4032,7 +3162,6 @@ function DraftEditor({ draft, setDraft, onSave, onDiscard, saveError, mode = "cr
         draft.dishCategory === "肉料理" && (React.createElement("select", { value: draft.meatType || "その他", onChange: (e) => updateMeatType(e.target.value), style: { ...inputStyle, color: COLORS.sage, fontSize: 13 } }, MEAT_TYPES.map((mt) => (React.createElement("option", { key: mt, value: mt }, mt))))),
         draft.dishCategory === "麺類" && (React.createElement("select", { value: draft.noodleType || "その他", onChange: (e) => updateNoodleType(e.target.value), style: { ...inputStyle, color: COLORS.sage, fontSize: 13 } }, NOODLE_TYPES.map((nt) => (React.createElement("option", { key: nt, value: nt }, nt))))),
         draft.dishCategory === "野菜料理" && (React.createElement("select", { value: draft.vegType || "その他", onChange: (e) => updateVegType(e.target.value), style: { ...inputStyle, color: COLORS.sage, fontSize: 13 } }, VEG_TYPES.map((vt) => (React.createElement("option", { key: vt, value: vt }, vt))))),
-        draft.dishCategory === "スープ・鍋" && (React.createElement("select", { value: draft.soupType || "その他", onChange: (e) => updateSoupType(e.target.value), style: { ...inputStyle, color: COLORS.sage, fontSize: 13 } }, SOUP_TYPES.map((st) => (React.createElement("option", { key: st, value: st }, st))))),
         React.createElement("label", { style: fieldLabelStyle }, "\u4F7F\u3063\u305F\u8ABF\u7406\u5BB6\u96FB(\u4EFB\u610F)"),
         React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 } },
             React.createElement("button", { onClick: () => update({ appliance: null }), style: {
@@ -4175,22 +3304,10 @@ function GroupedIngredientList({ ingredients, ratio }) {
             React.createElement("span", null, ing.base),
             React.createElement("span", { style: { color: COLORS.inkSoft } }, scaleAmountText(ing.amount, ratio)))))))))));
 }
-function DetailView({ recipe, loadingFull, onAddToShoppingList }) {
+function DetailView({ recipe, onAddToShoppingList }) {
     const [addedToList, setAddedToList] = useState(false);
     const baseServings = useMemo(() => parseBaseServings(recipe.servings), [recipe.servings]);
     const [targetServings, setTargetServings] = useState(baseServings?.value || null);
-    // `recipe.servings` isn't available until the full record loads (see
-    // the fullRecipe fetch in RecipeNotebook) — DetailView can now mount
-    // before that happens, with recipe.servings briefly undefined, so the
-    // useState initializer above only ever ran once against that empty
-    // value. Sync targetServings in whenever baseServings first becomes
-    // available; the `== null` check means this never overwrites an
-    // adjustment the person has actually made themselves.
-    useEffect(() => {
-        if (baseServings && targetServings == null) {
-            setTargetServings(baseServings.value);
-        }
-    }, [baseServings]);
     const ratio = baseServings && targetServings ? targetServings / baseServings.value : 1;
     const handleAddToShoppingList = () => {
         const scaledIngredients = (recipe.ingredients || []).map((ing) => ({
@@ -4201,8 +3318,8 @@ function DetailView({ recipe, loadingFull, onAddToShoppingList }) {
         setAddedToList(true);
         setTimeout(() => setAddedToList(false), 2000);
     };
-    return (React.createElement("div", { className: "page-enter" },
-        (recipe.imageUrl || recipe.imageUrl2 || recipe.imageUrl3) && (React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 18 } },
+    return (React.createElement("div", null,
+        (recipe.imageUrl || recipe.imageUrl2) && (React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 18 } },
             recipe.imageUrl && React.createElement("img", { src: recipe.imageUrl, alt: "", onError: (e) => {
                     e.target.style.display = "none";
                 }, style: {
@@ -4211,9 +3328,9 @@ function DetailView({ recipe, loadingFull, onAddToShoppingList }) {
                     width: "100%",
                     height: 260,
                     objectFit: "cover",
-                    borderRadius: RADIUS.image,
+                    borderRadius: 20,
                     border: `1px solid ${COLORS.line}`,
-                    boxShadow: SHADOW.soft,
+                    boxShadow: "0 8px 24px rgba(46,42,36,0.08)",
                 } }),
             recipe.imageUrl2 && React.createElement("img", { src: recipe.imageUrl2, alt: "", onError: (e) => {
                     e.target.style.display = "none";
@@ -4223,25 +3340,13 @@ function DetailView({ recipe, loadingFull, onAddToShoppingList }) {
                     width: "100%",
                     height: 260,
                     objectFit: "cover",
-                    borderRadius: RADIUS.image,
+                    borderRadius: 20,
                     border: `1px solid ${COLORS.line}`,
-                    boxShadow: SHADOW.soft,
-                } }),
-            recipe.imageUrl3 && React.createElement("img", { src: recipe.imageUrl3, alt: "", onError: (e) => {
-                    e.target.style.display = "none";
-                }, style: {
-                    flex: 1,
-                    minWidth: 0,
-                    width: "100%",
-                    height: 260,
-                    objectFit: "cover",
-                    borderRadius: RADIUS.image,
-                    border: `1px solid ${COLORS.line}`,
-                    boxShadow: SHADOW.soft,
+                    boxShadow: "0 8px 24px rgba(46,42,36,0.08)",
                 } }))),
         React.createElement("div", { style: { marginBottom: 4 } },
             React.createElement("h2", { style: { fontFamily: "'Noto Sans JP', sans-serif", fontSize: 25, fontWeight: 800, margin: 0, lineHeight: 1.35, letterSpacing: "-0.025em" } }, recipe.title)),
-        (recipe.dishCategory || recipe.meatType || recipe.noodleType || recipe.vegType || recipe.soupType || recipe.appliance || (recipe.sourceType && recipe.sourceType !== "other")) && (React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 } },
+        (recipe.dishCategory || recipe.meatType || recipe.noodleType || recipe.vegType || recipe.appliance || (recipe.sourceType && recipe.sourceType !== "other")) && (React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 } },
             recipe.sourceType && recipe.sourceType !== "other" && React.createElement("span", { style: {
                     fontSize: 11.5, fontWeight: 700, color: COLORS.sage, background: COLORS.sageSoft,
                     borderRadius: 999, padding: "4px 11px",
@@ -4262,10 +3367,6 @@ function DetailView({ recipe, loadingFull, onAddToShoppingList }) {
                     fontSize: 11.5, fontWeight: 700, color: COLORS.sage, background: COLORS.sageSoft,
                     borderRadius: 999, padding: "4px 11px",
                 } }, recipe.vegType),
-            recipe.soupType && React.createElement("span", { style: {
-                    fontSize: 11.5, fontWeight: 700, color: COLORS.sage, background: COLORS.sageSoft,
-                    borderRadius: 999, padding: "4px 11px",
-                } }, recipe.soupType),
             recipe.appliance && React.createElement("span", { style: {
                     fontSize: 11.5, fontWeight: 700, color: COLORS.mustard, background: "#F5EDE1",
                     borderRadius: 999, padding: "4px 11px",
@@ -4277,13 +3378,13 @@ function DetailView({ recipe, loadingFull, onAddToShoppingList }) {
                 justifyContent: "center",
                 gap: 8,
                 width: "100%",
-                background: addedToList ? COLORS.sageDark : COLORS.sage,
-                color: "#fff",
-                border: "none",
-                borderRadius: RADIUS.button,
-                padding: "14px 0",
+                background: addedToList ? COLORS.sageSoft : "#fff",
+                color: addedToList ? COLORS.sage : COLORS.accent,
+                border: `1px solid ${addedToList ? COLORS.sage : COLORS.accent}`,
+                borderRadius: 14,
+                padding: "12px 0",
                 fontWeight: 700,
-                fontSize: 15,
+                fontSize: 14,
                 margin: "10px 0 4px",
             } },
             addedToList ? React.createElement(Check, { size: 16 }) : React.createElement("span", { style: { fontSize: 16 } }, "\uD83D\uDED2"),
@@ -4312,8 +3413,8 @@ function DetailView({ recipe, loadingFull, onAddToShoppingList }) {
             } },
             React.createElement(Link2, { size: 13 }),
             " \u5143\u306E\u6295\u7A3F\u3092\u898B\u308B")),
-        React.createElement(SectionBlock, { title: "\u6750\u6599" }, loadingFull ? (React.createElement("p", { style: { fontSize: 13, color: COLORS.inkSoft, display: "flex", alignItems: "center", gap: 6 } }, React.createElement(Loader2, { size: 14, className: "spin" }), "\u8AAD\u307F\u8FBC\u307F\u4E2D...")) : recipe.ingredients?.length ? (React.createElement(GroupedIngredientList, { ingredients: recipe.ingredients, ratio: ratio })) : (React.createElement("p", { style: { fontSize: 13, color: COLORS.inkSoft } }, "\u6750\u6599\u306E\u8A18\u8F09\u306A\u3057"))),
-        React.createElement(SectionBlock, { title: "\u624B\u9806" }, loadingFull ? (React.createElement("p", { style: { fontSize: 13, color: COLORS.inkSoft, display: "flex", alignItems: "center", gap: 6 } }, React.createElement(Loader2, { size: 14, className: "spin" }), "\u8AAD\u307F\u8FBC\u307F\u4E2D...")) : recipe.steps?.length ? (React.createElement("ol", { style: { margin: 0, paddingLeft: 20, display: "flex", flexDirection: "column", gap: 10 } }, recipe.steps.map((s, i) => (React.createElement("li", { key: i, style: { fontSize: 14, lineHeight: 1.7 } }, s))))) : (React.createElement("p", { style: { fontSize: 13, color: COLORS.inkSoft } }, "\u624B\u9806\u306E\u8A18\u8F09\u306A\u3057"))),
+        React.createElement(SectionBlock, { title: "\u6750\u6599" }, recipe.ingredients?.length ? (React.createElement(GroupedIngredientList, { ingredients: recipe.ingredients, ratio: ratio })) : (React.createElement("p", { style: { fontSize: 13, color: COLORS.inkSoft } }, "\u6750\u6599\u306E\u8A18\u8F09\u306A\u3057"))),
+        React.createElement(SectionBlock, { title: "\u624B\u9806" }, recipe.steps?.length ? (React.createElement("ol", { style: { margin: 0, paddingLeft: 20, display: "flex", flexDirection: "column", gap: 10 } }, recipe.steps.map((s, i) => (React.createElement("li", { key: i, style: { fontSize: 14, lineHeight: 1.7 } }, s))))) : (React.createElement("p", { style: { fontSize: 13, color: COLORS.inkSoft } }, "\u624B\u9806\u306E\u8A18\u8F09\u306A\u3057"))),
         recipe.memo && (React.createElement(SectionBlock, { title: "\u30E1\u30E2" },
             React.createElement("p", { style: { fontSize: 13.5, lineHeight: 1.7, margin: 0, color: COLORS.inkSoft } }, recipe.memo)))));
 }
@@ -4395,21 +3496,17 @@ function SettingsPanel({
     addGroup, deleteGroup, moveGroup,
     editingGroupId, editingGroupName, setEditingGroupName,
     startRenameGroup, saveRenameGroup,
-    todoGroups, newTodoGroupName, setNewTodoGroupName,
-    addTodoGroup, deleteTodoGroup, moveTodoGroup, saveRenameTodoGroup,
     ungroupedLabel, setUngroupedLabel, saveUngroupedLabel,
     exportBackup, importBackup,
-    migrateEmbeddedPhotos, photoMigrationStatus,
     categoryOrder, applianceOrder, moveCategoryOrder, moveApplianceOrder,
     newApplianceDraft, setNewApplianceDraft, addAppliance, deleteAppliance,
     editingApplianceIndex, editingApplianceName, setEditingApplianceName,
     startRenameAppliance, saveRenameAppliance,
-    printPeople, addPrintPerson, deletePrintPerson, newPrintPersonDraft, setNewPrintPersonDraft,
 }) {
     const [openSection, setOpenSection] = useState(null);
-    const card = { background:COLORS.paperCard, border:`1px solid ${COLORS.line}`, borderRadius:RADIUS.card, overflow:"hidden", marginBottom:14, boxShadow:SHADOW.soft };
-    const row = { width:"100%", border:"none", background:COLORS.paperCard, display:"flex", alignItems:"center", gap:14, padding:"17px 16px", textAlign:"left", color:COLORS.ink };
-    const icon = { width:40, height:40, borderRadius:RADIUS.button, display:"grid", placeItems:"center", background:COLORS.sageSoft, color:COLORS.sage, flexShrink:0, fontSize:18, fontWeight:800 };
+    const card = { background:"#fff", border:`1px solid ${COLORS.line}`, borderRadius:20, overflow:"hidden", marginBottom:14, boxShadow:"0 2px 12px rgba(45,42,36,.035)" };
+    const row = { width:"100%", border:"none", background:"#fff", display:"flex", alignItems:"center", gap:14, padding:"17px 16px", textAlign:"left", color:COLORS.ink };
+    const icon = { width:38, height:38, borderRadius:13, display:"grid", placeItems:"center", background:COLORS.sageSoft, color:COLORS.accent, flexShrink:0, fontSize:18, fontWeight:800 };
     const title = { fontSize:15.5, fontWeight:750, margin:0 };
     const sub = { fontSize:11.5, color:COLORS.inkSoft, margin:"3px 0 0", lineHeight:1.45 };
     const divider = { height:1, background:COLORS.line, marginLeft:68 };
@@ -4418,34 +3515,29 @@ function SettingsPanel({
     const action = { border:"none", background:COLORS.accent, color:"#fff", borderRadius:12, padding:"10px 14px", fontSize:12.5, fontWeight:800 };
     const toggle = (key) => setOpenSection(openSection === key ? null : key);
     const arrow = (key) => React.createElement("span",{style:{marginLeft:"auto",fontSize:20,color:COLORS.inkSoft,transform:openSection===key?"rotate(90deg)":"none",transition:"transform .18s"}},"›");
-    const sectionHeader = { fontSize:12.5, fontWeight:800, color:COLORS.inkSoft, letterSpacing:"0.03em", margin:"20px 4px 8px" };
     return React.createElement("div",{style:{position:"fixed",inset:0,zIndex:110,background:COLORS.paper,overflowY:"auto",paddingBottom:"calc(30px + env(safe-area-inset-bottom,0px))"}},
         React.createElement("div",{style:{position:"sticky",top:0,zIndex:2,display:"grid",gridTemplateColumns:"44px 1fr 44px",alignItems:"center",padding:"calc(13px + env(safe-area-inset-top,0px)) 14px 12px",background:"rgba(247,246,242,.95)",backdropFilter:"blur(16px)"}},
             React.createElement("button",{onClick:onClose,style:{border:"none",background:"none",width:40,height:40,display:"grid",placeItems:"center"}},React.createElement(ChevronLeft,{size:26})),
-            React.createElement("h2",{style:{fontFamily:"'Noto Sans JP', sans-serif",fontSize:27,fontWeight:700,letterSpacing:"-0.04em",textAlign:"center",margin:0}},"設定"),
+            React.createElement("h2",{style:{fontSize:20,fontWeight:800,textAlign:"center",margin:0}},"設定"),
             React.createElement("div",null)
         ),
         React.createElement("div",{style:{maxWidth:520,margin:"0 auto",padding:"14px 14px 28px"}},
-            React.createElement("p",{style:{...sectionHeader,marginTop:0}},"レシピ"),
+            React.createElement("div",{style:card},
+                React.createElement("button",{onClick:()=>toggle("profile"),style:row},
+                    React.createElement("div",{style:icon},"☺"),
+                    React.createElement("div",null,React.createElement("p",{style:title},"プロフィール"),React.createElement("p",{style:sub},myName?`${myName} で利用中`:"名前を設定")),
+                    arrow("profile")),
+                openSection==="profile" && React.createElement("div",{style:editor},
+                    React.createElement("div",{style:{display:"flex",gap:8}},
+                        React.createElement("input",{value:nameDraft,onChange:e=>setNameDraft(e.target.value),onKeyDown:e=>e.key==="Enter"&&saveName(),placeholder:"あなたの名前",style:{...input,flex:1}}),
+                        React.createElement("button",{onClick:saveName,style:action},"保存")))
+            ),
             React.createElement("div",{style:card},
                 React.createElement("button",{onClick:()=>toggle("import"),style:row},
                     React.createElement("div",{style:icon},"↗"),
                     React.createElement("div",null,React.createElement("p",{style:title},"レシピ取り込み"),React.createElement("p",{style:sub},apiKey?"AI読み取り設定済み":"AI読み取りの設定")),
                     arrow("import")),
                 openSection==="import" && React.createElement("div",{style:editor},React.createElement(ApiKeySettings,{apiKey,saveApiKey}),React.createElement("div",{style:{height:8}}),React.createElement(JinaKeySettings,{jinaApiKey,saveJinaApiKey}))
-            ),
-            React.createElement("div",{style:card},
-                React.createElement("button",{onClick:migrateEmbeddedPhotos,disabled:photoMigrationStatus && typeof photoMigrationStatus==="object",style:row},
-                    React.createElement("div",{style:icon},"⚡"),
-                    React.createElement("div",null,
-                        React.createElement("p",{style:title},"写真を軽量化する"),
-                        React.createElement("p",{style:sub},
-                            photoMigrationStatus && typeof photoMigrationStatus==="object"
-                                ? `処理中… ${photoMigrationStatus.done}/${photoMigrationStatus.total}件`
-                                : photoMigrationStatus==="done"
-                                    ? "完了しました。起動が軽くなっているはずです。"
-                                    : "古いレシピの写真データを整理して、起動を速くします")),
-                    React.createElement("span",{style:{marginLeft:"auto",fontSize:20,color:COLORS.inkSoft}},"›"))
             ),
             React.createElement("div",{style:card},
                 React.createElement("button",{onClick:()=>toggle("categories"),style:row},
@@ -4474,7 +3566,6 @@ function SettingsPanel({
                         React.createElement("input",{value:newApplianceDraft,onChange:e=>setNewApplianceDraft(e.target.value),onKeyDown:e=>e.key==="Enter"&&addAppliance(),placeholder:"新しい調理家電",style:{...input,flex:1}}),
                         React.createElement("button",{onClick:addAppliance,style:action},"追加")))
             ),
-            React.createElement("p",{style:sectionHeader},"買い物"),
             React.createElement("div",{style:card},
                 React.createElement("button",{onClick:()=>toggle("groups"),style:row},
                     React.createElement("div",{style:icon},"▰"),
@@ -4492,56 +3583,21 @@ function SettingsPanel({
                         React.createElement("button",{onClick:addGroup,style:action},"追加")))
             ),
             React.createElement("div",{style:card},
-                React.createElement("button",{onClick:()=>toggle("todoGroups"),style:row},
-                    React.createElement("div",{style:icon},"✓"),
-                    React.createElement("div",null,React.createElement("p",{style:title},"タスクのグループ"),React.createElement("p",{style:sub},"追加・名前変更・並び替え")),
-                    arrow("todoGroups")),
-                openSection==="todoGroups" && React.createElement("div",{style:editor},
-                    (todoGroups||[]).map((g,i)=>React.createElement("div",{key:g.id,style:{display:"flex",alignItems:"center",gap:6,padding:"8px 0",borderBottom:`1px solid ${COLORS.line}`}},
-                        editingGroupId===g.id?React.createElement("input",{autoFocus:true,value:editingGroupName,onChange:e=>setEditingGroupName(e.target.value),onKeyDown:e=>e.key==="Enter"&&saveRenameTodoGroup(),onBlur:saveRenameTodoGroup,style:{...input,flex:1,padding:"8px"}}):React.createElement("span",{style:{flex:1,fontSize:13.5,fontWeight:650}},g.name),
-                        React.createElement("button",{onClick:()=>moveTodoGroup(i,-1),disabled:i===0,style:{border:"none",background:"none",opacity:i===0?.25:1}},"↑"),
-                        React.createElement("button",{onClick:()=>moveTodoGroup(i,1),disabled:i===(todoGroups||[]).length-1,style:{border:"none",background:"none",opacity:i===(todoGroups||[]).length-1?.25:1}},"↓"),
-                        React.createElement("button",{onClick:()=>startRenameGroup(g.id,g.name),style:{border:"none",background:"none",color:COLORS.accent,fontWeight:700}},"編集"),
-                        React.createElement("button",{onClick:()=>deleteTodoGroup(g.id),style:{border:"none",background:"none",color:COLORS.plum}},"削除"))),
-                    React.createElement("div",{style:{display:"flex",gap:8,marginTop:12}},
-                        React.createElement("input",{value:newTodoGroupName,onChange:e=>setNewTodoGroupName(e.target.value),onKeyDown:e=>e.key==="Enter"&&addTodoGroup(),placeholder:"新しいグループ",style:{...input,flex:1}}),
-                        React.createElement("button",{onClick:addTodoGroup,style:action},"追加")))
-            ),
-            React.createElement("p",{style:sectionHeader},"プリント"),
-            React.createElement("div",{style:card},
-                React.createElement("button",{onClick:()=>toggle("printPeople"),style:row},
-                    React.createElement("div",{style:icon},"👤"),
-                    React.createElement("div",null,React.createElement("p",{style:title},"プリントの宛先"),React.createElement("p",{style:sub},"お子さんの名前などを登録")),
-                    arrow("printPeople")),
-                openSection==="printPeople" && React.createElement("div",{style:editor},
-                    (printPeople||[]).map((p)=>React.createElement("div",{key:p,style:{display:"flex",alignItems:"center",gap:6,padding:"8px 0",borderBottom:`1px solid ${COLORS.line}`}},
-                        React.createElement("span",{style:{flex:1,fontSize:13.5,fontWeight:650}},p),
-                        React.createElement("button",{onClick:()=>deletePrintPerson(p),style:{border:"none",background:"none",color:COLORS.plum}},"削除"))),
-                    React.createElement("div",{style:{display:"flex",gap:8,marginTop:12}},
-                        React.createElement("input",{value:newPrintPersonDraft,onChange:e=>setNewPrintPersonDraft(e.target.value),onKeyDown:e=>{if(e.key==="Enter"){addPrintPerson(newPrintPersonDraft);setNewPrintPersonDraft("");}},placeholder:"例: 長男、長女",style:{...input,flex:1}}),
-                        React.createElement("button",{onClick:()=>{addPrintPerson(newPrintPersonDraft);setNewPrintPersonDraft("");},style:action},"追加")))
-            ),
-            React.createElement("p",{style:sectionHeader},"全般"),
-            React.createElement("div",{style:card},
-                React.createElement("button",{onClick:()=>toggle("profile"),style:row},
-                    React.createElement("div",{style:icon},"☺"),
-                    React.createElement("div",null,React.createElement("p",{style:title},"プロフィール"),React.createElement("p",{style:sub},myName?`${myName} で利用中`:"名前を設定")),
-                    arrow("profile")),
-                openSection==="profile" && React.createElement("div",{style:editor},
-                    React.createElement("div",{style:{display:"flex",gap:8}},
-                        React.createElement("input",{value:nameDraft,onChange:e=>setNameDraft(e.target.value),onKeyDown:e=>e.key==="Enter"&&saveName(),placeholder:"あなたの名前",style:{...input,flex:1}}),
-                        React.createElement("button",{onClick:saveName,style:action},"保存")))
-            ),
-            React.createElement("div",{style:card},
                 React.createElement("button",{onClick:exportBackup,style:row},
                     React.createElement("div",{style:icon},"⇧"),
-                    React.createElement("div",null,React.createElement("p",{style:title},"データをバックアップ"),React.createElement("p",{style:sub},"レシピ・買い物リスト・プリントをまとめてファイルに保存")),
+                    React.createElement("div",null,React.createElement("p",{style:title},"データをバックアップ"),React.createElement("p",{style:sub},"レシピと買い物リストをファイルに保存")),
                     React.createElement("span",{style:{marginLeft:"auto",fontSize:20,color:COLORS.inkSoft}},"›")),
                 React.createElement("div",{style:divider}),
                 React.createElement("button",{onClick:importBackup,style:row},
                     React.createElement("div",{style:icon},"⇩"),
                     React.createElement("div",null,React.createElement("p",{style:title},"データを復元"),React.createElement("p",{style:sub},"バックアップファイルから戻す")),
                     React.createElement("span",{style:{marginLeft:"auto",fontSize:20,color:COLORS.inkSoft}},"›"))
+            ),
+            React.createElement("div",{style:card},
+                React.createElement("div",{style:{...row,cursor:"default"}},
+                    React.createElement("div",{style:icon},"i"),
+                    React.createElement("div",null,React.createElement("p",{style:title},"レシピノート"),React.createElement("p",{style:sub},"シンプルに、ためて、作って、買い物へ。")),
+                    React.createElement("span",{style:{marginLeft:"auto",fontSize:11,color:COLORS.inkSoft}},"v1"))
             )
         )
     );
@@ -4549,27 +3605,10 @@ function SettingsPanel({
 
 function App() {
     useGoogleFonts();
-    const [showOnboarding, setShowOnboarding] = useState(() => {
-        try {
-            return !localStorage.getItem("onboardingSeen");
-        }
-        catch {
-            return false;
-        }
-    });
-    const finishOnboarding = () => {
-        setShowOnboarding(false);
-        try {
-            localStorage.setItem("onboardingSeen", "1");
-        }
-        catch {
-            // ignore — worst case it shows again once
-        }
-    };
     const [mode, setMode] = useState(() => {
         try {
             const saved = localStorage.getItem("appMode");
-            return (saved && saved !== "home") ? saved : "recipe";
+            return saved && saved !== "todo" ? saved : "recipe";
         }
         catch {
             return "recipe";
@@ -4602,95 +3641,6 @@ function App() {
     const [applianceOrder, setApplianceOrder] = useState(APPLIANCES);
     const [newApplianceDraft, setNewApplianceDraft] = useState("");
     const [editingApplianceIndex, setEditingApplianceIndex] = useState(null);
-    // ---- プリント管理 (school/PTA paper photos, shared between family
-    // members so the physical paper can be thrown away) ----
-    const [printPeople, setPrintPeople] = useState([]);
-    const [printIndex, setPrintIndex] = useState([]);
-    const [printsLoaded, setPrintsLoaded] = useState(false);
-    const [printSaveError, setPrintSaveError] = useState("");
-    const [newPrintPersonDraft, setNewPrintPersonDraft] = useState("");
-    useEffect(() => {
-        const peopleRef = uref("print-people");
-        const peopleCb = peopleRef.on("value", (snap) => {
-            setPrintPeople(snap.val() || []);
-        });
-        const idxRef = uref("print-index");
-        const idxCb = idxRef.on("value", (snap) => {
-            const val = snap.val();
-            // Sorted by createdAt (when it was added to the app), not the
-            // document's own written date — those can be backdated or out
-            // of order, but newest-added-first is what people expect from
-            // a running list.
-            const list = val ? Object.values(val).sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || "")) : [];
-            setPrintIndex(list);
-            setPrintsLoaded(true);
-        }, () => setPrintsLoaded(true));
-        return () => {
-            peopleRef.off("value", peopleCb);
-            idxRef.off("value", idxCb);
-        };
-    }, []);
-    function buildPrintIndexEntry(print) {
-        // Same lightweight-index idea as recipes: the list only needs a
-        // small thumbnail, not all (up to 10) full-resolution photos —
-        // those are fetched from prints/{id} only once a specific entry is
-        // actually opened.
-        return {
-            id: print.id,
-            title: print.title || "",
-            date: print.date || "",
-            createdAt: print.createdAt || "",
-            createdBy: print.createdBy || "",
-            personTags: print.personTags || [],
-            photoCount: (print.photos || []).length,
-            thumbnailUrl: (print.photos || [])[0] || "",
-        };
-    }
-    async function savePrint(printData) {
-        const id = printData.id || `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-        // Photos come in already full-quality (compressed in prints.js at
-        // capture time to keep text legible) — the index just needs a much
-        // smaller copy of the first one for the thumbnail.
-        const thumbnailUrl = printData.photos?.[0]
-            ? await recompressDataUrl(printData.photos[0], 200, 0.5).catch(() => printData.photos[0])
-            : "";
-        const full = { ...printData, id, createdAt: printData.createdAt || new Date().toISOString(), createdBy: printData.createdBy || myName || "" };
-        const indexEntry = { ...buildPrintIndexEntry(full), thumbnailUrl };
-        try {
-            await Promise.all([
-                uref(`prints/${id}`).set(full),
-                uref(`print-index/${id}`).set(indexEntry),
-            ]);
-        }
-        catch {
-            setPrintSaveError("保存に失敗しました(通信環境を確認してください)。");
-        }
-        return full;
-    }
-    async function deletePrint(id) {
-        try {
-            await Promise.all([
-                uref(`prints/${id}`).remove(),
-                uref(`print-index/${id}`).remove(),
-            ]);
-        }
-        catch {
-            setPrintSaveError("削除に失敗しました(通信環境を確認してください)。");
-        }
-    }
-    function addPrintPerson(name) {
-        const trimmed = name.trim();
-        if (!trimmed || printPeople.includes(trimmed))
-            return;
-        const next = [...printPeople, trimmed];
-        setPrintPeople(next);
-        uref("print-people").set(next);
-    }
-    function deletePrintPerson(name) {
-        const next = printPeople.filter((p) => p !== name);
-        setPrintPeople(next);
-        uref("print-people").set(next);
-    }
     const [editingApplianceName, setEditingApplianceName] = useState("");
     useEffect(() => {
         const n = local.get("myName");
@@ -4881,14 +3831,7 @@ function App() {
                 }
             });
             if (Object.keys(updates).length > 0) {
-                // dishCategory/appliance are also carried in the lightweight
-                // recipe-index (see buildRecipeIndexEntry) — update both, or
-                // the list/filter views would keep showing the old value
-                // until each recipe happened to be individually re-saved.
-                await Promise.all(Object.keys(updates).flatMap((id) => [
-                    uref(`recipes/${id}`).set(updates[id]),
-                    uref(`recipe-index/${id}`).set(buildRecipeIndexEntry(updates[id])),
-                ]));
+                await Promise.all(Object.keys(updates).map((id) => uref(`recipes/${id}`).set(updates[id])));
             }
         }
         catch {
@@ -4974,124 +3917,6 @@ function App() {
         };
         input.click();
     }
-    // One-time cleanup for recipes saved with a photo at the old, larger
-    // size (1000px / quality 0.85 — see photo-editor.js's history). Since
-    // photos are embedded directly as base64 in each recipe's Realtime
-    // Database record (deliberately not using Firebase Storage, which
-    // needs the paid Blaze plan), the whole `recipes` node — photos and
-    // all — is what gets re-fetched on every app launch and re-written to
-    // localStorage on every change. Re-compressing existing photos down to
-    // the same small target new ones already use (600px / 0.6, in
-    // recompressDataUrl) shrinks that payload without needing Storage.
-    const [photoMigrationStatus, setPhotoMigrationStatus] = useState(null); // null | {done, total} | "done" | "error"
-    async function migrateEmbeddedPhotos() {
-        // Set a visible "starting" state synchronously, before anything
-        // that could throw — so a click always produces some visible
-        // change even in an edge case we haven't anticipated, rather than
-        // silently doing nothing if something above this point breaks.
-        setPhotoMigrationStatus({ done: 0, total: 0 });
-        let all;
-        try {
-            // This settings panel lives in a different component (App)
-            // than the one holding the live `recipes` state (RecipeNotebook)
-            // — read the current list directly from Firebase instead of
-            // relying on a prop/state value that isn't in scope here.
-            const snap = await uref("recipes").once("value");
-            all = Object.values(snap.val() || {});
-        }
-        catch (e) {
-            setPhotoMigrationStatus(null);
-            alert(`写真の整理を開始できませんでした：${e?.message || e}`);
-            return;
-        }
-        const targets = all.filter((r) => (r.imageUrl || "").startsWith("data:") || (r.imageUrl2 || "").startsWith("data:") || (r.imageUrl3 || "").startsWith("data:"));
-        if (targets.length === 0) {
-            setPhotoMigrationStatus("done");
-            return;
-        }
-        setPhotoMigrationStatus({ done: 0, total: targets.length });
-        let failures = 0;
-        for (let i = 0; i < targets.length; i++) {
-            const r = targets[i];
-            try {
-                const patch = {};
-                if ((r.imageUrl || "").startsWith("data:")) {
-                    patch.imageUrl = await recompressDataUrl(r.imageUrl, 450, 0.6);
-                }
-                if ((r.imageUrl2 || "").startsWith("data:")) {
-                    patch.imageUrl2 = await recompressDataUrl(r.imageUrl2, 450, 0.6);
-                }
-                if ((r.imageUrl3 || "").startsWith("data:")) {
-                    patch.imageUrl3 = await recompressDataUrl(r.imageUrl3, 450, 0.6);
-                }
-                await Promise.all([
-                    uref(`recipes/${r.id}`).update(patch),
-                    // imageUrl/imageUrl2/imageUrl3 also live in the
-                    // lightweight recipe-index (see buildRecipeIndexEntry) —
-                    // without this, the list/grid views would keep showing
-                    // the old, large photo even after this migration.
-                    uref(`recipe-index/${r.id}`).update(patch),
-                ]);
-            }
-            catch (e) {
-                // Leave this one's photo as-is (still works, just heavy) and
-                // keep going — one failure (e.g. a corrupt data URL)
-                // shouldn't stop the rest of the batch. Surface it once at
-                // the end instead of per-item, so it doesn't spam N alerts.
-                failures++;
-                if (failures === 1) {
-                    console.error("photo migration item failed:", e);
-                }
-            }
-            setPhotoMigrationStatus({ done: i + 1, total: targets.length });
-        }
-        if (failures > 0) {
-            alert(`${failures}件の写真を軽量化できませんでした。データが壊れている可能性があります。`);
-        }
-        // Phase 2: 献立(meal-plan) entries. addMealPlanEntry snapshots a
-        // copy of the recipe's photo into meal-plan/{date} at the moment a
-        // dish is added, so it stays correct even if the recipe is later
-        // deleted — but that means every day's entries carry their own
-        // full copy of whatever the recipe's photo was AT THAT TIME. Days
-        // added before recipes were compressed still have the old, large
-        // version baked in, and the recipe migration above only touches
-        // recipes/ — this is what actually made 献立 (and, since it's the
-        // same underlying fetch, anywhere else that loads the whole
-        // meal-plan tree) slow to load even after recipes were cleaned up.
-        let mealPlanFailures = 0;
-        try {
-            const mpSnap = await uref("meal-plan").once("value");
-            const mealPlan = mpSnap.val() || {};
-            const dateStrs = Object.keys(mealPlan).filter((d) => (mealPlan[d] || []).some((e) => (e.imageUrl || "").startsWith("data:")));
-            if (dateStrs.length > 0) {
-                setPhotoMigrationStatus({ done: 0, total: dateStrs.length });
-                for (let i = 0; i < dateStrs.length; i++) {
-                    const dateStr = dateStrs[i];
-                    try {
-                        const entries = mealPlan[dateStr] || [];
-                        const nextEntries = await Promise.all(entries.map(async (e) => (e.imageUrl || "").startsWith("data:")
-                            ? { ...e, imageUrl: await recompressDataUrl(e.imageUrl, 450, 0.6).catch(() => e.imageUrl) }
-                            : e));
-                        await uref(`meal-plan/${dateStr}`).set(nextEntries);
-                    }
-                    catch (e) {
-                        mealPlanFailures++;
-                        if (mealPlanFailures === 1) {
-                            console.error("meal-plan photo migration item failed:", e);
-                        }
-                    }
-                    setPhotoMigrationStatus({ done: i + 1, total: dateStrs.length });
-                }
-            }
-        }
-        catch (e) {
-            console.error("meal-plan photo migration failed:", e);
-        }
-        if (mealPlanFailures > 0) {
-            alert(`献立の写真${mealPlanFailures}件を軽量化できませんでした。`);
-        }
-        setPhotoMigrationStatus("done");
-    }
 
     function saveUngroupedLabel(listKey) {
         const label = (editingUngroupedLabel[listKey] || "").trim() || "グループなし";
@@ -5100,7 +3925,6 @@ function App() {
         uref(`${listKey}-ungrouped-label`).set(label);
     }
     return (React.createElement("div", { style: { display: "flex", flexDirection: "column", height: "100dvh" } },
-        showOnboarding && React.createElement(OnboardingFlow, { onFinish: finishOnboarding }),
         React.createElement("div", { style: {
                 position: "fixed",
                 left: "50%",
@@ -5121,35 +3945,26 @@ function App() {
             React.createElement("button", { onClick: () => { switchMode("recipe"); setRecipeInitialView("list"); setRecipeHomeToken((v) => v + 1); setShowSettings(false); }, style: {
                     flex: 1, border: "none", background: "none", padding: "7px 0 5px",
                     display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
-                    fontSize: 10.5, fontWeight: 700, color: mode === "recipe" && recipeInitialView === "list" ? COLORS.featureRecipe : COLORS.inkSoft,
-                } }, React.createElement(NavIcon, { icon: BookOpen, active: mode === "recipe" && recipeInitialView === "list", color: COLORS.featureRecipe, soft: COLORS.featureRecipeSoft }), "レシピ"),
+                    fontSize: 10.5, fontWeight: 700, color: mode === "recipe" && recipeInitialView === "list" ? COLORS.accent : COLORS.inkSoft,
+                } }, React.createElement(BookOpen, { size: 21 }), "レシピ"),
             React.createElement("button", { onClick: () => { switchMode("recipe"); setRecipeInitialView("calendar"); setRecipeHomeToken((v) => v + 1); setShowSettings(false); }, style: {
                     flex: 1, border: "none", background: "none", padding: "7px 0 5px",
                     display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
-                    fontSize: 10.5, fontWeight: 700, color: mode === "recipe" && recipeInitialView === "calendar" ? COLORS.featureRecipe : COLORS.inkSoft,
-                } }, React.createElement(NavIcon, { icon: CalendarIcon, active: mode === "recipe" && recipeInitialView === "calendar", color: COLORS.featureRecipe, soft: COLORS.featureRecipeSoft }), "献立"),
+                    fontSize: 10.5, fontWeight: 700, color: mode === "recipe" && recipeInitialView === "calendar" ? COLORS.accent : COLORS.inkSoft,
+                } }, React.createElement(CalendarIcon, { size: 21 }), "献立"),
             React.createElement("button", { onClick: () => switchMode("shopping"), style: {
                     flex: 1, border: "none", background: "none", padding: "7px 0 5px",
                     display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
-                    fontSize: 10.5, fontWeight: 700, color: (mode === "shopping" || mode === "todo") ? COLORS.featureShopping : COLORS.inkSoft,
-                } }, React.createElement(NavIcon, { icon: ClipboardPaste, active: mode === "shopping" || mode === "todo", color: COLORS.featureShopping, soft: COLORS.featureShoppingSoft }), "買い物/todo"),
-            React.createElement("button", { onClick: () => switchMode("prints"), style: {
-                    flex: 1, border: "none", background: "none", padding: "7px 0 5px",
-                    display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
-                    fontSize: 10.5, fontWeight: 700, color: mode === "prints" ? COLORS.featurePrints : COLORS.inkSoft,
-                } }, React.createElement(NavIcon, { icon: FileText, active: mode === "prints", color: COLORS.featurePrints, soft: COLORS.featurePrintsSoft }), "プリント"),
+                    fontSize: 10.5, fontWeight: 700, color: mode === "shopping" ? COLORS.accent : COLORS.inkSoft,
+                } }, React.createElement(ClipboardPaste, { size: 21 }), "買い物"),
             React.createElement("button", { onClick: () => setShowSettings(true), title: "設定", "aria-label": "設定", style: {
                     flex: 1, border: "none", background: "none", padding: "7px 0 5px",
                     display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
                     fontSize: 10.5, fontWeight: 700, color: COLORS.inkSoft,
-                } }, React.createElement(NavIcon, { icon: Settings, active: false, color: COLORS.ink, soft: COLORS.soft }), "設定")),
+                } }, React.createElement(Settings, { size: 21 }), "設定")),
         React.createElement("div", { style: { flex: 1, minHeight: 0, overflowY: "auto", paddingBottom: "calc(70px + env(safe-area-inset-bottom, 0px))", background: COLORS.paper } },
             mode === "recipe" && React.createElement(RecipeNotebook, { key: recipeHomeToken, initialView: recipeInitialView, apiKey: apiKey, jinaApiKey: jinaApiKey, categoryOrder: categoryOrder, applianceOrder: applianceOrder }),
-            // 買い物・ToDo は同じ画面の中の切り替えタブになった(以前は別々のタブ)。
-            // どちらのモードで来ても同じ TodoApp を出し、内部の切り替えタブが
-            // 初期表示だけ mode に合わせる。
-            (mode === "shopping" || mode === "todo") && React.createElement(TodoApp, { key: mode, initialListKey: mode, myName: myName, ungroupedLabels: ungroupedLabels }),
-            mode === "prints" && React.createElement(LazyPrintsView, { printIndex: printIndex, printsLoaded: printsLoaded, printPeople: printPeople, saveError: printSaveError, onSave: savePrint, onDelete: deletePrint, onAddPerson: addPrintPerson, myName: myName, uref: uref })),
+            mode === "shopping" && React.createElement(TodoApp, { listKey: "shopping", myName: myName, ungroupedLabel: ungroupedLabels.shopping })),
         showSettings && React.createElement(SettingsPanel, {
             onClose: () => setShowSettings(false),
             myName: myName,
@@ -5171,20 +3986,11 @@ function App() {
             setEditingGroupName: setEditingGroupName,
             startRenameGroup: startRenameGroup,
             saveRenameGroup: () => saveRenameGroup("shopping"),
-            todoGroups: allGroups.todo || [],
-            newTodoGroupName: newGroupDraft.todo || "",
-            setNewTodoGroupName: (value) => setNewGroupDraft((prev) => ({ ...prev, todo: value })),
-            addTodoGroup: () => addGroupTo("todo"),
-            deleteTodoGroup: (id) => deleteGroupFrom("todo", id),
-            moveTodoGroup: (index, direction) => moveGroup("todo", index, direction),
-            saveRenameTodoGroup: () => saveRenameGroup("todo"),
             ungroupedLabel: editingUngroupedLabel.shopping || "",
             setUngroupedLabel: (value) => setEditingUngroupedLabel((prev) => ({ ...prev, shopping: value })),
             saveUngroupedLabel: () => saveUngroupedLabel("shopping"),
             exportBackup: exportBackup,
             importBackup: importBackup,
-            migrateEmbeddedPhotos: migrateEmbeddedPhotos,
-            photoMigrationStatus: photoMigrationStatus,
             categoryOrder: categoryOrder,
             applianceOrder: applianceOrder,
             moveCategoryOrder: moveCategoryOrder,
@@ -5198,11 +4004,6 @@ function App() {
             setEditingApplianceName: setEditingApplianceName,
             startRenameAppliance: startRenameAppliance,
             saveRenameAppliance: saveRenameAppliance,
-            printPeople: printPeople,
-            addPrintPerson: addPrintPerson,
-            deletePrintPerson: deletePrintPerson,
-            newPrintPersonDraft: newPrintPersonDraft,
-            setNewPrintPersonDraft: setNewPrintPersonDraft,
         })));
 }
 const rootEl = document.getElementById("root");
