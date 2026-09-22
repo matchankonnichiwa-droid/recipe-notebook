@@ -2178,7 +2178,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
         planRef.on("value", cb);
         return () => planRef.off("value", cb);
     }, []);
-    const MAX_MEALS_PER_DAY = 3;
+    const MAX_MEALS_PER_DAY = 4; // 主菜・副菜・スープ・もう1品
     function addMealPlanEntry(dateStr, recipe) {
         // Compute the next array from the updater's `prev`, not the outer
         // `mealPlan` closure — otherwise two calls fired back-to-back for
