@@ -31,6 +31,10 @@ const SHADOW = { soft: "0 2px 12px rgba(65,55,45,0.05)", lifted: "0 5px 24px rgb
 const MAIN_CATEGORIES = ["ご飯もの", "肉料理", "魚介料理", "麺類"];
 const SIDE_CATEGORIES = ["野菜料理"];
 const SOUP_CATEGORIES = ["スープ・鍋"];
+// Mirrors MAX_MEALS_PER_DAY in app.js (主菜・副菜・スープ・もう1品). The two
+// have to agree — when app.js's was 3 while this screen showed 4 slots, the
+// 4th slot silently refused everything.
+const MAX_DAY_ENTRIES = 4;
 function entryRole(entry) {
     if (MAIN_CATEGORIES.includes(entry.dishCategory))
         return { label: "主菜", color: "#C0604A", bg: "#FBEAE5" };
@@ -218,68 +222,185 @@ function DateSwapSheet({ startDateStr, mealPlan, recipesById, weekdayNames, onCl
 }
 // Simple search-and-pick list, scoped to one role's category pool (main or
 // side dishes) — used to manually fill an empty slot rather than guessing.
-function SlotPickerSheet({ recipes, pool, onClose, onPick }) {
+// Genre / sub-type structure for the recipe picker, mirrored from the main
+// recipe list in app.js (DISH_CATEGORIES + MEAT_TYPES / NOODLE_TYPES /
+// VEG_TYPES / SOUP_TYPES). This file is lazy-loaded, so it keeps its own copy
+// rather than importing from app.js (which would be circular) — if a genre or
+// sub-type is added over there, add it here too.
+const PICKER_DEFAULT_GENRES = ["肉料理", "魚介料理", "野菜料理", "ご飯もの", "麺類", "スープ・鍋", "デザート", "パン", "その他"];
+const PICKER_SUBTYPES = {
+    "肉料理": { field: "meatType", types: ["鶏肉", "豚肉", "牛肉", "ひき肉", "その他"] },
+    "麺類": { field: "noodleType", types: ["うどん", "そば", "ラーメン", "パスタ", "その他"] },
+    "野菜料理": { field: "vegType", types: ["サラダ", "炒め物", "和え物・おひたし", "煮物", "漬け物", "その他"] },
+    "スープ・鍋": { field: "soupType", types: ["スープ", "みそ汁", "鍋", "その他"] },
+};
+function recipeGenre(r) {
+    return r.dishCategory || "その他";
+}
+// The sub-type within a genre (パスタ within 麺類, 鶏肉 within 肉料理, …), or
+// null for genres that don't have any. Recipes saved before sub-types existed
+// fall back to "その他", same as the main list does.
+function recipeSubType(r) {
+    const def = PICKER_SUBTYPES[recipeGenre(r)];
+    return def ? (r[def.field] || "その他") : null;
+}
+// Which of a day's entries get a visible card: the first main / side / soup
+// dish each, plus a single "もう1品" for whatever's left. Anything beyond that
+// still counts toward the day's limit but has no card to show or remove it —
+// see newEntryWouldBeHidden below.
+function daySlots(entries) {
+    const mainEntry = entries.find((e) => MAIN_CATEGORIES.includes(e.dishCategory));
+    const sideEntry = entries.find((e) => SIDE_CATEGORIES.includes(e.dishCategory));
+    const soupEntry = entries.find((e) => SOUP_CATEGORIES.includes(e.dishCategory));
+    const freeEntry = entries.find((e) => e !== mainEntry && e !== sideEntry && e !== soupEntry);
+    return { mainEntry, sideEntry, soupEntry, freeEntry };
+}
+// The picker can now offer recipes from any genre in any slot, so it's
+// possible to pick a recipe whose slot is already taken *and* the "もう1品"
+// slot is too — it'd be saved but never shown anywhere, which is exactly the
+// "I added it and nothing happened" experience. Catch that up front instead.
+function newEntryWouldBeHidden(entries, recipe) {
+    const after = [...entries, { recipeId: recipe.id, dishCategory: recipe.dishCategory || null }];
+    const { mainEntry, sideEntry, soupEntry, freeEntry } = daySlots(after);
+    const shown = new Set([mainEntry, sideEntry, soupEntry, freeEntry].filter(Boolean));
+    return after.some((e) => !shown.has(e));
+}
+function PickerChip({ label, active, onClick, soft }) {
+    return React.createElement("button", { onClick: onClick, style: {
+            flexShrink: 0, fontSize: 12, padding: "6px 13px", borderRadius: 999,
+            border: soft ? `1px solid ${active ? COLORS.accent : COLORS.line}` : "none",
+            background: active ? (soft ? COLORS.accentSoft : COLORS.accent) : (soft ? "transparent" : COLORS.chipBg),
+            color: active ? (soft ? COLORS.accent : "#fff") : COLORS.inkSoft,
+            fontWeight: 700, whiteSpace: "nowrap", cursor: "pointer",
+        } }, label);
+}
+// onPick may return a message (string) to say why a recipe can't be added
+// right now; the sheet stays open and shows it instead of closing silently.
+function SlotPickerSheet({ recipes, pool, categoryOrder, onClose, onPick }) {
     const [query, setQuery] = useState("");
     const [categoryFilter, setCategoryFilter] = useState(null);
-    const inPool = useMemo(() => (pool ? recipes.filter((r) => pool.includes(r.dishCategory)) : recipes), [recipes, pool]);
-    const availableCategories = useMemo(() => {
-        const seen = new Set();
-        const list = [];
-        inPool.forEach((r) => {
-            const cat = r.dishCategory || "その他";
-            if (!seen.has(cat)) {
-                seen.add(cat);
-                list.push(cat);
-            }
-        });
-        return list;
-    }, [inPool]);
+    const [subFilter, setSubFilter] = useState(null);
+    const [notice, setNotice] = useState("");
+    // All genres that actually have recipes, in the user's own genre order
+    // (Settings → レシピのジャンル); any genre in the data that isn't in that
+    // order still gets a chip so its recipes can't become unreachable.
+    const availableGenres = useMemo(() => {
+        const present = new Set(recipes.map(recipeGenre));
+        const ordered = (categoryOrder && categoryOrder.length ? categoryOrder : PICKER_DEFAULT_GENRES).filter((g) => present.has(g));
+        present.forEach((g) => { if (!ordered.includes(g))
+            ordered.push(g); });
+        return ordered;
+    }, [recipes, categoryOrder]);
+    const availableSubTypes = useMemo(() => {
+        const def = categoryFilter && PICKER_SUBTYPES[categoryFilter];
+        if (!def)
+            return [];
+        const present = new Set(recipes.filter((r) => recipeGenre(r) === categoryFilter).map(recipeSubType));
+        return def.types.filter((t) => present.has(t));
+    }, [recipes, categoryFilter]);
     const results = useMemo(() => {
-        let list = categoryFilter ? inPool.filter((r) => (r.dishCategory || "その他") === categoryFilter) : inPool;
+        let list = recipes;
+        if (categoryFilter)
+            list = list.filter((r) => recipeGenre(r) === categoryFilter);
+        if (categoryFilter && subFilter)
+            list = list.filter((r) => recipeSubType(r) === subFilter);
         if (query.trim()) {
             const q = query.trim().toLowerCase();
-            list = list.filter((r) => (r.title || "").toLowerCase().includes(q));
+            list = list.filter((r) => [r.title, recipeGenre(r), recipeSubType(r)].filter(Boolean).join(" ").toLowerCase().includes(q));
+        }
+        // Every genre is searchable from every slot now, but the slot you
+        // tapped (主菜 / 副菜 / スープ) still gets its own kind of dish listed
+        // first while browsing without a genre picked.
+        if (pool && !categoryFilter) {
+            list = [...list].sort((a, b) => (pool.includes(a.dishCategory) ? 0 : 1) - (pool.includes(b.dishCategory) ? 0 : 1));
         }
         return list.slice(0, 40);
-    }, [inPool, categoryFilter, query]);
+    }, [recipes, pool, categoryFilter, subFilter, query]);
+    // On iOS the on-screen keyboard doesn't shrink the layout viewport, so
+    // a sheet pinned to `bottom: 0` just slides in *behind* it. That's
+    // harmless while the sheet is tall (its search box happens to sit above
+    // the keyboard), but with only a few results the sheet is short and the
+    // whole thing — search box included — ends up hidden while typing (the
+    // search box is auto-focused, so the keyboard is already up the moment
+    // this opens). Tracking the visual viewport lets the sheet sit on top of
+    // the keyboard instead, and cap its height to the space actually left.
+    const [viewport, setViewport] = useState({ inset: 0, height: null });
+    useEffect(() => {
+        const vv = window.visualViewport;
+        if (!vv)
+            return;
+        const update = () => {
+            // Portion of the layout viewport's bottom edge covered by the keyboard.
+            const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+            setViewport({ inset, height: vv.height });
+        };
+        update();
+        vv.addEventListener("resize", update);
+        vv.addEventListener("scroll", update);
+        return () => {
+            vv.removeEventListener("resize", update);
+            vv.removeEventListener("scroll", update);
+        };
+    }, []);
+    const keyboardOpen = viewport.inset > 0;
+    const sheetMaxHeight = viewport.height
+        ? Math.min(window.innerHeight * 0.75, viewport.height - 24)
+        : "75vh";
+    const pickGenre = (g) => {
+        setCategoryFilter(g);
+        setSubFilter(null);
+        setNotice("");
+    };
     return React.createElement("div", { style: { position: "fixed", inset: 0, zIndex: 96 } },
         React.createElement("div", { onClick: onClose, style: { position: "absolute", inset: 0, background: "rgba(32,35,31,0.32)" } }),
         React.createElement("div", { style: {
-                position: "absolute", left: 0, right: 0, bottom: 0, maxWidth: 480, margin: "0 auto",
-                background: COLORS.paper, borderRadius: "22px 22px 0 0", padding: "16px 18px calc(20px + env(safe-area-inset-bottom,0px))",
-                maxHeight: "75vh", overflowY: "auto", boxShadow: "0 -8px 30px rgba(32,35,31,0.18)"
+                position: "absolute", left: 0, right: 0, bottom: viewport.inset, maxWidth: 480, margin: "0 auto",
+                background: COLORS.paper, borderRadius: "22px 22px 0 0",
+                // No home-indicator padding needed while the keyboard is up —
+                // it's covering that area anyway.
+                padding: keyboardOpen ? "16px 18px 12px" : "16px 18px calc(20px + env(safe-area-inset-bottom,0px))",
+                maxHeight: sheetMaxHeight, boxShadow: "0 -8px 30px rgba(32,35,31,0.18)",
+                // Search box and genre chips stay put; only the result list
+                // scrolls, so they're still reachable with a long list.
+                display: "flex", flexDirection: "column",
             } },
-            React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 } },
-                React.createElement("span", { style: { fontSize: 14, fontWeight: 800, color: COLORS.ink } }, "\u30EC\u30B7\u30D4\u3092\u9078\u3076"),
-                React.createElement("button", { onClick: onClose, "aria-label": "\u9589\u3058\u308B", style: { border: "none", background: "none", color: COLORS.inkSoft, display: "flex", padding: 4 } },
-                    React.createElement(X, { size: 18 }))),
-            React.createElement("input", { value: query, onChange: (e) => setQuery(e.target.value), placeholder: "\u30EC\u30B7\u30D4\u3092\u691C\u7D22", autoFocus: true, style: {
-                    width: "100%", boxSizing: "border-box", border: `1px solid ${COLORS.line}`, borderRadius: 12,
-                    padding: "10px 14px", fontSize: 15, marginBottom: 10, color: COLORS.ink, background: "#fff"
-                } }),
-            availableCategories.length > 1 && React.createElement("div", { style: { display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4, marginBottom: 10, WebkitOverflowScrolling: "touch" } },
-                React.createElement("button", { onClick: () => setCategoryFilter(null), style: {
-                        flexShrink: 0, fontSize: 12, padding: "6px 13px", borderRadius: 999, border: "none",
-                        background: !categoryFilter ? COLORS.accent : COLORS.chipBg, color: !categoryFilter ? "#fff" : COLORS.inkSoft,
-                        fontWeight: 700, whiteSpace: "nowrap", cursor: "pointer",
-                    } }, "\u3059\u3079\u3066"),
-                availableCategories.map((cat) => React.createElement("button", { key: cat, onClick: () => setCategoryFilter(categoryFilter === cat ? null : cat), style: {
-                        flexShrink: 0, fontSize: 12, padding: "6px 13px", borderRadius: 999, border: "none",
-                        background: categoryFilter === cat ? COLORS.accent : COLORS.chipBg, color: categoryFilter === cat ? "#fff" : COLORS.inkSoft,
-                        fontWeight: 700, whiteSpace: "nowrap", cursor: "pointer",
-                    } }, cat))),
-            results.length === 0 && React.createElement("p", { style: { fontSize: 13, color: COLORS.inkSoft, padding: "12px 2px" } }, "\u898B\u3064\u304B\u308A\u307E\u305B\u3093\u3067\u3057\u305F"),
-            results.map((r) => React.createElement("button", { key: r.id, onClick: () => onPick(r), style: {
-                    display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", border: "none",
-                    background: "none", padding: "10px 2px", borderBottom: `1px solid ${COLORS.line}`, cursor: "pointer",
-                } },
-                React.createElement("div", { style: {
-                        width: 40, height: 40, borderRadius: 8, flexShrink: 0, overflow: "hidden", background: COLORS.chipBg,
-                        display: "flex", alignItems: "center", justifyContent: "center"
-                    } }, (r.imageUrl || r.imageUrl2) ? React.createElement("img", { src: r.imageUrl || r.imageUrl2, alt: "", style: { width: "100%", height: "100%", objectFit: "cover" } }) : React.createElement(BookOpen, { size: 16, color: COLORS.inkSoft })),
-                React.createElement("span", { style: { fontSize: 14, fontWeight: 650, color: COLORS.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, r.title || "(無題)")))));
+            React.createElement("div", { style: { flexShrink: 0 } },
+                React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 } },
+                    React.createElement("span", { style: { fontSize: 14, fontWeight: 800, color: COLORS.ink } }, "レシピを選ぶ"),
+                    React.createElement("button", { onClick: onClose, "aria-label": "閉じる", style: { border: "none", background: "none", color: COLORS.inkSoft, display: "flex", padding: 4 } },
+                        React.createElement(X, { size: 18 }))),
+                React.createElement("input", { value: query, onChange: (e) => { setQuery(e.target.value); setNotice(""); }, placeholder: "レシピを検索", autoFocus: true, style: {
+                        width: "100%", boxSizing: "border-box", border: `1px solid ${COLORS.line}`, borderRadius: 12,
+                        padding: "10px 14px", fontSize: 15, marginBottom: 10, color: COLORS.ink, background: "#fff"
+                    } }),
+                availableGenres.length > 1 && React.createElement("div", { style: { display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4, marginBottom: 10, WebkitOverflowScrolling: "touch" } },
+                    React.createElement(PickerChip, { label: "すべて", active: !categoryFilter, onClick: () => pickGenre(null) }),
+                    availableGenres.map((g) => React.createElement(PickerChip, { key: g, label: g, active: categoryFilter === g, onClick: () => pickGenre(categoryFilter === g ? null : g) }))),
+                availableSubTypes.length > 0 && React.createElement("div", { style: { display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4, marginBottom: 10, WebkitOverflowScrolling: "touch" } },
+                    React.createElement(PickerChip, { soft: true, label: "すべての" + categoryFilter, active: !subFilter, onClick: () => { setSubFilter(null); setNotice(""); } }),
+                    availableSubTypes.map((t) => React.createElement(PickerChip, { soft: true, key: t, label: t, active: subFilter === t, onClick: () => { setSubFilter(subFilter === t ? null : t); setNotice(""); } }))),
+                notice && React.createElement("p", { style: { fontSize: 12.5, color: COLORS.plum, lineHeight: 1.6, margin: "0 2px 10px" } }, notice)),
+            React.createElement("div", { style: { flex: "1 1 auto", minHeight: 0, overflowY: "auto", WebkitOverflowScrolling: "touch" } },
+                results.length === 0 && React.createElement("p", { style: { fontSize: 13, color: COLORS.inkSoft, padding: "12px 2px" } }, "見つかりませんでした"),
+                results.map((r) => {
+                    const genre = recipeGenre(r);
+                    const sub = recipeSubType(r);
+                    const kind = sub && sub !== "その他" ? `${genre}・${sub}` : genre;
+                    return React.createElement("button", { key: r.id, onClick: () => { const msg = onPick(r); if (msg)
+                            setNotice(msg); }, style: {
+                            display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", border: "none",
+                            background: "none", padding: "10px 2px", borderBottom: `1px solid ${COLORS.line}`, cursor: "pointer",
+                        } },
+                        React.createElement("div", { style: {
+                                width: 40, height: 40, borderRadius: 8, flexShrink: 0, overflow: "hidden", background: COLORS.chipBg,
+                                display: "flex", alignItems: "center", justifyContent: "center"
+                            } }, (r.imageUrl || r.imageUrl2) ? React.createElement("img", { src: r.imageUrl || r.imageUrl2, alt: "", style: { width: "100%", height: "100%", objectFit: "cover" } }) : React.createElement(BookOpen, { size: 16, color: COLORS.inkSoft })),
+                        React.createElement("div", { style: { minWidth: 0, flex: 1 } },
+                            React.createElement("div", { style: { fontSize: 14, fontWeight: 650, color: COLORS.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, r.title || "(無題)"),
+                            React.createElement("div", { style: { fontSize: 11.5, color: COLORS.inkSoft, marginTop: 2 } }, kind)));
+                }))));
 }
-export function CalendarView({ recipes, mealPlan, onAddEntry, onRemoveEntry, onSetDayEntries, onSelectRecipe, onBack, initialMode, onModeChange }) {
+export function CalendarView({ recipes, mealPlan, onAddEntry, onRemoveEntry, onSetDayEntries, onSelectRecipe, onBack, initialMode, onModeChange, categoryOrder }) {
     const [mode, setModeRaw] = useState(initialMode || "plan"); // "plan" | "edit"
     // Report mode changes upward so the parent can remember which tab
     // ("献立をたてる" vs "献立編集") was active — this component gets
@@ -504,10 +625,7 @@ export function CalendarView({ recipes, mealPlan, onAddEntry, onRemoveEntry, onS
                                 } }, React.createElement(Trash2, { size: 12 }), "\u524A\u9664")),
                         React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 6 } },
                             (() => {
-                                const mainEntry = entries.find((e) => MAIN_CATEGORIES.includes(e.dishCategory));
-                                const sideEntry = entries.find((e) => SIDE_CATEGORIES.includes(e.dishCategory));
-                                const soupEntry = entries.find((e) => SOUP_CATEGORIES.includes(e.dishCategory));
-                                const freeEntry = entries.find((e) => e !== mainEntry && e !== sideEntry && e !== soupEntry);
+                                const { mainEntry, sideEntry, soupEntry, freeEntry } = daySlots(entries);
                                 return [
                                     mainEntry
                                         ? React.createElement(DishCard, { key: "main", entry: liveEntry(mainEntry, recipesById), roleLabel: "\u4E3B\u83DC", onSelectRecipe: onSelectRecipe, onRemoveEntry: (recipeId) => onRemoveEntry(dateStr, recipeId), onSwapEntry: (recipeId) => swapEntry(dateStr, recipeId) })
@@ -536,8 +654,24 @@ export function CalendarView({ recipes, mealPlan, onAddEntry, onRemoveEntry, onS
         addSlotFor && React.createElement(SlotPickerSheet, {
             recipes: recipes,
             pool: addSlotFor.pool,
+            categoryOrder: categoryOrder,
             onClose: () => setAddSlotFor(null),
-            onPick: (recipe) => { onAddEntry(addSlotFor.dateStr, recipe); setAddSlotFor(null); },
+            // Returns a message when the recipe can't be added, so the sheet
+            // can say why — addMealPlanEntry (app.js) just drops these
+            // cases without a word, which looks like "tapped it, nothing
+            // happened".
+            onPick: (recipe) => {
+                const dayEntries = Array.isArray(mealPlan[addSlotFor.dateStr]) ? mealPlan[addSlotFor.dateStr] : [];
+                if (dayEntries.some((e) => e.recipeId === recipe.id))
+                    return "このレシピはこの日にすでに入っています。";
+                if (dayEntries.length >= MAX_DAY_ENTRIES)
+                    return `この日は登録数の上限(${MAX_DAY_ENTRIES}品)に達しています。`;
+                if (newEntryWouldBeHidden(dayEntries, recipe))
+                    return "この日の「もう1品」の枠がすでに使われているので、このジャンルのレシピは追加できません。";
+                onAddEntry(addSlotFor.dateStr, recipe);
+                setAddSlotFor(null);
+                return null;
+            },
         }),
         dateSwapFor && React.createElement(DateSwapSheet, {
             startDateStr: dateSwapFor,
