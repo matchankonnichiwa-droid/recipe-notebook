@@ -1699,13 +1699,15 @@ function TodoApp({ initialListKey, myName, ungroupedLabels }) {
     const currentGroups = groups[activeList] || [];
     const total = currentItems.length;
     const remaining = currentItems.filter((t) => !t.done).length;
-    const doneItems = currentItems.filter((t) => t.done);
     const pendingItems = currentItems.filter((t) => !t.done);
     const groupCounts = currentGroups.map((g) => ({ ...g, count: pendingItems.filter((t) => t.groupId === g.id).length }));
     const ungroupedCount = pendingItems.filter((t) => t.source !== "recipe" && (!t.groupId || !currentGroups.some((g) => g.id === t.groupId))).length;
     const recipeCount = pendingItems.filter((t) => t.source === "recipe").length;
-    const visible = currentItems
-        .filter((t) => {
+    // Shared by both the pending list (visible) and the completed list
+    // (doneItems) below — previously only the pending list actually
+    // filtered by the selected group tab, so switching to e.g. "子供"
+    // still showed every completed task from every group underneath it.
+    const matchesGroupFilter = (t) => {
         if (groupFilter === "all")
             return true;
         if (groupFilter === RECIPE_GROUP)
@@ -1713,7 +1715,10 @@ function TodoApp({ initialListKey, myName, ungroupedLabels }) {
         if (groupFilter === NO_GROUP)
             return t.source !== "recipe" && (!t.groupId || !currentGroups.some((g) => g.id === t.groupId));
         return t.groupId === groupFilter;
-    })
+    };
+    const doneItems = currentItems.filter((t) => t.done).filter(matchesGroupFilter);
+    const visible = currentItems
+        .filter(matchesGroupFilter)
         .filter((t) => !t.done)
         .filter((t) => !searchQuery.trim() || t.text.toLowerCase().includes(searchQuery.trim().toLowerCase()));
     let sections = [];
