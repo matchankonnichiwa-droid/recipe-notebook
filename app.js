@@ -1789,7 +1789,7 @@ function TodoApp({ initialListKey, myName, ungroupedLabels }) {
             background: groupFilter === f.key ? TODO_PALETTE.ink : TODO_PALETTE.card, color: groupFilter === f.key ? "#fff" : TODO_PALETTE.inkSoft,
             border: groupFilter === f.key ? "none" : `1px solid ${TODO_PALETTE.line}` } }, f.label))),
     // action row (search / complete-all)
-    React.createElement("div", { style: { display: "flex", gap: 6, padding: "0 14px 8px", alignItems: "center" } }, activeList === "shopping" && currentItems.some((t) => !t.done) && React.createElement("button", { onClick: completeAll, title: "すべて完了にする",
+    React.createElement("div", { style: { display: "flex", gap: 6, padding: "0 14px 8px", alignItems: "center" } }, currentItems.some((t) => !t.done) && React.createElement("button", { onClick: completeAll, title: "すべて完了にする",
         style: { border: `1px solid ${TODO_PALETTE.sage}`, cursor: "pointer", background: TODO_PALETTE.sageSoft, color: TODO_PALETTE.sage, fontSize: 11, fontFamily: TODO_FONT_BODY, borderRadius: 999, padding: "4px 10px", whiteSpace: "nowrap" } }, "\u2713 \u4E00\u62EC\u5B8C\u4E86"), React.createElement("button", { onClick: () => setShowSearch((s) => !s), "aria-label": "検索",
         style: { marginLeft: "auto", border: "none", background: "transparent", color: showSearch ? TODO_PALETTE.sage : TODO_PALETTE.inkSoft, fontSize: 13, cursor: "pointer", padding: "2px 6px" } }, "\uD83D\uDD0D")), showSearch && React.createElement("div", { style: { padding: "0 14px 8px" } }, React.createElement("input", { autoFocus: true, value: searchQuery, onChange: (e) => setSearchQuery(e.target.value),
         placeholder: "キーワードで検索...",
