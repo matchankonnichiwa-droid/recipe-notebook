@@ -558,7 +558,7 @@ function extractTableIngredient(rawLine) {
 // Common recipe sub-section labels. Using a whitelist (rather than "any short
 // kana/kanji line") avoids OCR garbage being misread as a group header.
 const KNOWN_GROUP_HEADERS = [
-    "下味", "衣", "付け合せ", "付け合わせ", "タレ", "ソース", "具", "トッピング",
+    "下味", "衣", "付け合せ", "付け合わせ", "つけあわせ", "つけ合わせ", "つけ合せ", "付けあわせ", "添え物", "タレ", "ソース", "具", "トッピング",
     "生地", "仕上げ", "つけだれ", "漬けだれ", "下ごしらえ", "ドレッシング", "あん", "具材",
     "合わせ調味料", "調味料", "合わせだれ", "煮汁", "つけ汁", "スープ", "衣液", "バッター液",
 ];
@@ -571,6 +571,8 @@ const KNOWN_GROUP_HEADERS = [
 const KNOWN_GROUP_SUFFIXES = ["だれ", "ダレ", "ソース", "あん", "アン", "スープ", "ペースト", "ドレッシング"];
 const MAX_GROUP_HEADER_LENGTH = 20;
 function matchesKnownGroup(label) {
+    // "A:玉ねぎペースト" のように「記号:見出し名」の形でも認識する
+    label = label.replace(/^[A-ZＡ-Ｚ①-⑳0-9０-９]{1,2}[:：]/, "").trim();
     if (KNOWN_GROUP_HEADERS.includes(label))
         return true;
     if (label.length > MAX_GROUP_HEADER_LENGTH)
@@ -1214,7 +1216,7 @@ recipesは通常1件の配列です。ページ内に、料理名・材料・手
 
 dishCategory・meatTypeは、材料名や手順の文字列に含まれる単語だけで機械的に判定せず、レシピ全体の内容(主菜の食材・調理法)を理解した上で最も適切なものを選んでください。例えば材料に少量だけ肉が入っていても主役が野菜なら「野菜料理」にしてください。
 
-材料名には、代替案や切り方などの注記(例:「ネギ(できれば九条ネギ)」)はそのまま含めてよいですが、「下味」「衣」「タレ」「合わせ調味料」「調味料」のような明確なサブグループの見出しがある場合だけ、材料名の末尾に "(グループ名)" を付けてください(例: "しょうゆ(下味)")。見出しが「【調味料】」「【下味】」のように【】で囲まれて書かれていても扱いは同じで、【】は装飾なので取り除き、中の言葉(例: "調味料")だけをグループ名として使ってください(例: 【調味料】の下に "醤油" "酢" とあれば "醤油(調味料)" "酢(調味料)")。「ねぎ塩だれ」「ごまだれ」「甘辛あん」のように、具体的な名前+「だれ/ソース/あん/スープ」などの種類語がついた見出しも同様に明確なサブグループとして扱い、その見出し文字列をそのまま "(グループ名)" として付けてください(例: "ねぎ(ねぎ塩だれ)")。見出しが「（A）合わせ調味料」のように参照用の記号(A・B・①など)付きで書かれている場合は、その記号は無視してグループ名本体だけを使ってください(例: "キッコーマン濃いだし本つゆ(合わせ調味料)")。単なる注記をグループ扱いしないでください。見出しが「(A)」のように記号だけで具体的なグループ名が書かれていない場合、または「A塩…小さじ1/3」「B砂糖、酢…各大さじ1」のように各行の先頭にA・Bなどの記号が直接くっついている場合は、その記号自体を "(グループ名)" として材料名の末尾に付けてください(例: "塩(A)"、"砂糖(B)")。この記号は「Ａ卵…１個」のように全角(Ａ・Ｂ・Ｃなど)で書かれていることも多く、その場合も同じルールで扱ってください(例: "卵(Ａ)")。ただし、「【塩】」のような名前付きの見出しが先にあり、その配下の一部の材料だけに「A顆粒鶏ガラ」のように記号が直接くっついている場合は、その記号は「(まとめてもみこむ)」のような単なる内部的な目印であり、見出し名とは別のグループ名を作るものではありません。この場合は記号を無視して、既にある見出し名(例:"塩")だけをグループ名にしてください(誤って"塩(A)"や"塩(A・塩)"のように組み合わせないこと)。同じ見出しの配下にある材料は、記号の有無にかかわらず全員同じグループ名になるようにしてください(例: "手羽先(塩)"、"顆粒鶏ガラ(塩)"、"砂糖(塩)" — "顆粒鶏ガラ(A・塩)"のようにしない)。これは、まとまりがあることをアプリ側で表示するために必要です。いずれの場合も、その記号(A・B・①など、全角半角問わず)が付いている品目を材料リストから省略しないでください。「調味料」「下味」のようにありふれた単語に見えても、材料欄の中で見出しとして機能していれば必ず付けてください。見落としやすいので、材料を書き出した後に、本文にサブグループの見出しがなかったか見直してください。
+材料名には、代替案や切り方などの注記(例:「ネギ(できれば九条ネギ)」)はそのまま含めてよいですが、「下味」「衣」「タレ」「合わせ調味料」「調味料」のような明確なサブグループの見出しがある場合だけ、材料名の末尾に "(グループ名)" を付けてください(例: "しょうゆ(下味)")。見出しが「【調味料】」「【下味】」のように【】で囲まれて書かれていても扱いは同じで、【】は装飾なので取り除き、中の言葉(例: "調味料")だけをグループ名として使ってください(例: 【調味料】の下に "醤油" "酢" とあれば "醤油(調味料)" "酢(調味料)")。「ねぎ塩だれ」「ごまだれ」「甘辛あん」のように、具体的な名前+「だれ/ソース/あん/スープ」などの種類語がついた見出しも同様に明確なサブグループとして扱い、その見出し文字列をそのまま "(グループ名)" として付けてください(例: "ねぎ(ねぎ塩だれ)")。見出しが「（A）合わせ調味料」のように参照用の記号(A・B・①など)付きで書かれている場合は、その記号は無視してグループ名本体だけを使ってください(例: "キッコーマン濃いだし本つゆ(合わせ調味料)")。単なる注記をグループ扱いしないでください。見出しが「(A)」のように記号だけで具体的なグループ名が書かれていない場合、または「A塩…小さじ1/3」「B砂糖、酢…各大さじ1」のように各行の先頭にA・Bなどの記号が直接くっついている場合は、その記号自体を "(グループ名)" として材料名の末尾に付けてください(例: "塩(A)"、"砂糖(B)")。この記号は「Ａ卵…１個」のように全角(Ａ・Ｂ・Ｃなど)で書かれていることも多く、その場合も同じルールで扱ってください(例: "卵(Ａ)")。ただし、「【塩】」のような名前付きの見出しが先にあり、その配下の一部の材料だけに「A顆粒鶏ガラ」のように記号が直接くっついている場合は、その記号は「(まとめてもみこむ)」のような単なる内部的な目印であり、見出し名とは別のグループ名を作るものではありません。この場合は記号を無視して、既にある見出し名(例:"塩")だけをグループ名にしてください(誤って"塩(A)"や"塩(A・塩)"のように組み合わせないこと)。同じ見出しの配下にある材料は、記号の有無にかかわらず全員同じグループ名になるようにしてください(例: "手羽先(塩)"、"顆粒鶏ガラ(塩)"、"砂糖(塩)" — "顆粒鶏ガラ(A・塩)"のようにしない)。これは、まとまりがあることをアプリ側で表示するために必要です。見出し(例:「玉ねぎペースト」「ガルムソース」)の配下の品目の大半に同じ記号(A・Bなど)が付いている場合、その記号は手順(「Aを混ぜる」など)から参照されているので、グループ名を「記号:見出し名」にしてください(例: \"味付き塩こしょう(A:玉ねぎペースト)\"、\"水(B:ガルムソース)\")。見出しの直後の品目は必ずその見出しの配下です。記号が付いていなくても(例: 見出し「玉ねぎペースト」の直後の「玉ねぎ」)同じグループ名(\"玉ねぎ(A:玉ねぎペースト)\")にし、グループなしの先頭部分に入れないでください。「つけあわせ」「付け合わせ」の見出しの配下の品目も、\"サニーレタス(つけあわせ)\" のようにグループ名を付けてください。材料の並び順は元の本文のとおりにしてください。いずれの場合も、その記号(A・B・①など、全角半角問わず)が付いている品目を材料リストから省略しないでください。「調味料」「下味」のようにありふれた単語に見えても、材料欄の中で見出しとして機能していれば必ず付けてください。見落としやすいので、材料を書き出した後に、本文にサブグループの見出しがなかったか見直してください。
 
 材料の見つけ方: 本文中に「材料」という語を含む見出し(「材料」「材料(2人分)」など)があれば、そこが本来の材料欄です。その見出しの直後から、次の見出しや「作り方」「①」などの手順の始まりの直前までに列挙されている品目を、1品も欠かさずすべて書き出してください。分量(大さじ・小さじ・g・個数など)が書かれていればそのまま使い、書かれていなければ空欄のままにしてください(適量などと勝手に補わない)。
 このブログ特有の注意点として、記事の冒頭の自己紹介文に「◆大さじ１杯の生クリーム」「◆ローリエ、バルサミコ酢…」のような食材の例が箇条書きで出てくることがありますが、これは直後に「〜は使いません」と続く冗談で、実際の材料ではありません。この部分だけは無視してください——ただし、これはあくまで「材料」見出しより前に出てくる自己紹介文の中の話であり、実際の「材料」見出し以降にある品目は(似た書き方に見えても)すべて本物の材料なので、絶対に省略しないでください。
@@ -1699,15 +1701,13 @@ function TodoApp({ initialListKey, myName, ungroupedLabels }) {
     const currentGroups = groups[activeList] || [];
     const total = currentItems.length;
     const remaining = currentItems.filter((t) => !t.done).length;
+    const doneItems = currentItems.filter((t) => t.done);
     const pendingItems = currentItems.filter((t) => !t.done);
     const groupCounts = currentGroups.map((g) => ({ ...g, count: pendingItems.filter((t) => t.groupId === g.id).length }));
     const ungroupedCount = pendingItems.filter((t) => t.source !== "recipe" && (!t.groupId || !currentGroups.some((g) => g.id === t.groupId))).length;
     const recipeCount = pendingItems.filter((t) => t.source === "recipe").length;
-    // Shared by both the pending list (visible) and the completed list
-    // (doneItems) below — previously only the pending list actually
-    // filtered by the selected group tab, so switching to e.g. "子供"
-    // still showed every completed task from every group underneath it.
-    const matchesGroupFilter = (t) => {
+    const visible = currentItems
+        .filter((t) => {
         if (groupFilter === "all")
             return true;
         if (groupFilter === RECIPE_GROUP)
@@ -1715,10 +1715,7 @@ function TodoApp({ initialListKey, myName, ungroupedLabels }) {
         if (groupFilter === NO_GROUP)
             return t.source !== "recipe" && (!t.groupId || !currentGroups.some((g) => g.id === t.groupId));
         return t.groupId === groupFilter;
-    };
-    const doneItems = currentItems.filter((t) => t.done).filter(matchesGroupFilter);
-    const visible = currentItems
-        .filter(matchesGroupFilter)
+    })
         .filter((t) => !t.done)
         .filter((t) => !searchQuery.trim() || t.text.toLowerCase().includes(searchQuery.trim().toLowerCase()));
     let sections = [];
@@ -1789,7 +1786,7 @@ function TodoApp({ initialListKey, myName, ungroupedLabels }) {
             background: groupFilter === f.key ? TODO_PALETTE.ink : TODO_PALETTE.card, color: groupFilter === f.key ? "#fff" : TODO_PALETTE.inkSoft,
             border: groupFilter === f.key ? "none" : `1px solid ${TODO_PALETTE.line}` } }, f.label))),
     // action row (search / complete-all)
-    React.createElement("div", { style: { display: "flex", gap: 6, padding: "0 14px 8px", alignItems: "center" } }, currentItems.some((t) => !t.done) && React.createElement("button", { onClick: completeAll, title: "すべて完了にする",
+    React.createElement("div", { style: { display: "flex", gap: 6, padding: "0 14px 8px", alignItems: "center" } }, activeList === "shopping" && currentItems.some((t) => !t.done) && React.createElement("button", { onClick: completeAll, title: "すべて完了にする",
         style: { border: `1px solid ${TODO_PALETTE.sage}`, cursor: "pointer", background: TODO_PALETTE.sageSoft, color: TODO_PALETTE.sage, fontSize: 11, fontFamily: TODO_FONT_BODY, borderRadius: 999, padding: "4px 10px", whiteSpace: "nowrap" } }, "\u2713 \u4E00\u62EC\u5B8C\u4E86"), React.createElement("button", { onClick: () => setShowSearch((s) => !s), "aria-label": "検索",
         style: { marginLeft: "auto", border: "none", background: "transparent", color: showSearch ? TODO_PALETTE.sage : TODO_PALETTE.inkSoft, fontSize: 13, cursor: "pointer", padding: "2px 6px" } }, "\uD83D\uDD0D")), showSearch && React.createElement("div", { style: { padding: "0 14px 8px" } }, React.createElement("input", { autoFocus: true, value: searchQuery, onChange: (e) => setSearchQuery(e.target.value),
         placeholder: "キーワードで検索...",
