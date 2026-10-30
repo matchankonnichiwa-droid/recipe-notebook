@@ -5259,4 +5259,53 @@ function App() {
         })));
 }
 const rootEl = document.getElementById("root");
-createRoot(rootEl).render(React.createElement(App, null));
+// ---- 合言葉ロック画面 ----
+// 合言葉そのものはコードに書かず、SHA-256 の値だけを持つ。一度合っていれば
+// その端末では記憶して、次回以降は聞かない。合言葉を変えるときは
+// GATE_HASH を差し替え(下の GATE_SALT + ":" + 合言葉 を SHA-256 にかける)。
+const GATE_SALT = "recipe-notebook-v1";
+const GATE_HASH = "7e8ad3404050df962e46f98e0cee12588fd40936587e53ad53e6718ada65cf82";
+async function gateHash(text) {
+    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(GATE_SALT + ":" + text));
+    return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+function Gate() {
+    const [ok, setOk] = useState(() => {
+        try { return localStorage.getItem("gateOk") === GATE_HASH; } catch (e) { return false; }
+    });
+    const [input, setInput] = useState("");
+    const [error, setError] = useState(false);
+    const [busy, setBusy] = useState(false);
+    if (ok) return React.createElement(App, null);
+    const submit = async () => {
+        if (busy) return;
+        setBusy(true);
+        try {
+            const h = await gateHash(input.trim());
+            if (h === GATE_HASH) {
+                try { localStorage.setItem("gateOk", GATE_HASH); } catch (e) {}
+                setOk(true);
+            } else {
+                setError(true);
+            }
+        } catch (e) {
+            setError(true);
+        }
+        setBusy(false);
+    };
+    const wrap = { minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f8f6f1", padding: "24px", boxSizing: "border-box" };
+    const box = { width: "100%", maxWidth: "320px", textAlign: "center", fontFamily: "inherit" };
+    const field = { width: "100%", boxSizing: "border-box", padding: "12px", fontSize: "16px", border: "1px solid #ccc", borderRadius: "10px", marginTop: "12px" };
+    const btn = { width: "100%", padding: "12px", fontSize: "16px", border: "none", borderRadius: "10px", background: "#8a9a82", color: "#fff", marginTop: "12px" };
+    return React.createElement("div", { style: wrap },
+        React.createElement("div", { style: box },
+            React.createElement("div", { style: { fontSize: "18px", fontWeight: 600 } }, "合言葉を入力してください"),
+            React.createElement("input", {
+                type: "password", value: input, autoFocus: true, style: field,
+                onChange: (e) => { setInput(e.target.value); setError(false); },
+                onKeyDown: (e) => { if (e.key === "Enter") submit(); }
+            }),
+            error ? React.createElement("div", { style: { color: "#c0392b", fontSize: "14px", marginTop: "8px" } }, "合言葉が違います") : null,
+            React.createElement("button", { style: btn, onClick: submit }, "開く")));
+}
+createRoot(rootEl).render(React.createElement(Gate, null));
