@@ -1661,7 +1661,8 @@ function TodoApp({ initialListKey, myName, ungroupedLabels }) {
         saveItems(activeList, items[activeList].filter((t) => t.id !== id));
     }
     function clearDone() {
-        saveItems(activeList, items[activeList].filter((t) => !t.done));
+        // いま表示しているタブの完了タスクだけを削除する(他のタブの完了分は残す)
+        saveItems(activeList, items[activeList].filter((t) => !(t.done && matchesGroupFilter(t))));
     }
     function completeAll() {
         // Only complete the items currently shown under the active tab
@@ -1701,13 +1702,8 @@ function TodoApp({ initialListKey, myName, ungroupedLabels }) {
     const currentGroups = groups[activeList] || [];
     const total = currentItems.length;
     const remaining = currentItems.filter((t) => !t.done).length;
-    const doneItems = currentItems.filter((t) => t.done);
-    const pendingItems = currentItems.filter((t) => !t.done);
-    const groupCounts = currentGroups.map((g) => ({ ...g, count: pendingItems.filter((t) => t.groupId === g.id).length }));
-    const ungroupedCount = pendingItems.filter((t) => t.source !== "recipe" && (!t.groupId || !currentGroups.some((g) => g.id === t.groupId))).length;
-    const recipeCount = pendingItems.filter((t) => t.source === "recipe").length;
-    const visible = currentItems
-        .filter((t) => {
+    // 選択中のタブ(groupFilter)に属するかどうか。未完了・完了どちらにも同じ条件を使う。
+    function matchesGroupFilter(t) {
         if (groupFilter === "all")
             return true;
         if (groupFilter === RECIPE_GROUP)
@@ -1715,7 +1711,14 @@ function TodoApp({ initialListKey, myName, ungroupedLabels }) {
         if (groupFilter === NO_GROUP)
             return t.source !== "recipe" && (!t.groupId || !currentGroups.some((g) => g.id === t.groupId));
         return t.groupId === groupFilter;
-    })
+    }
+    const doneItems = currentItems.filter((t) => t.done && matchesGroupFilter(t));
+    const pendingItems = currentItems.filter((t) => !t.done);
+    const groupCounts = currentGroups.map((g) => ({ ...g, count: pendingItems.filter((t) => t.groupId === g.id).length }));
+    const ungroupedCount = pendingItems.filter((t) => t.source !== "recipe" && (!t.groupId || !currentGroups.some((g) => g.id === t.groupId))).length;
+    const recipeCount = pendingItems.filter((t) => t.source === "recipe").length;
+    const visible = currentItems
+        .filter(matchesGroupFilter)
         .filter((t) => !t.done)
         .filter((t) => !searchQuery.trim() || t.text.toLowerCase().includes(searchQuery.trim().toLowerCase()));
     let sections = [];
