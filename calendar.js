@@ -509,22 +509,10 @@ export function CalendarView({ recipes, mealPlan, onAddEntry, onRemoveEntry, onS
         if (selected.size === 0)
             return;
         const dateStrs = [...selected].sort();
-        const history = []; // { date: Date, recipeId } — avoid repeats within ~3 weeks
-        gridDays.flat().forEach(({ dateStr, date }) => {
-            const entries = Array.isArray(mealPlan[dateStr]) ? mealPlan[dateStr] : [];
-            entries.forEach((e) => history.push({ date, recipeId: e.recipeId }));
-        });
+        // 直近に入れたレシピも除外しない(以前は前後21日以内のものを避けていた)。
+        // 同じ日に同じレシピが重なることだけは pickForDay 側で避ける。
         dateStrs.forEach((dateStr) => {
-            const [y, m, d] = dateStr.split("-").map(Number);
-            const date = new Date(y, m - 1, d);
-            const avoidIds = new Set(history.filter((h) => Math.abs((date - h.date) / 86400000) <= 21).map((h) => h.recipeId));
-            const { main, side, soup } = pickForDay(dateStr, avoidIds);
-            if (main)
-                history.push({ date, recipeId: main.id });
-            if (side)
-                history.push({ date, recipeId: side.id });
-            if (soup)
-                history.push({ date, recipeId: soup.id });
+            pickForDay(dateStr, new Set());
         });
         setSelected(new Set());
         setMode("edit");
