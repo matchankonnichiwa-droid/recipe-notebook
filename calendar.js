@@ -233,17 +233,17 @@ const PICKER_SUBTYPES = {
     "麺類": { field: "noodleType", types: ["うどん", "そば", "ラーメン", "パスタ", "その他"] },
     "野菜料理": { field: "vegType", types: ["サラダ", "炒め物", "和え物・おひたし", "煮物", "漬け物", "その他"] },
     "スープ・鍋": { field: "soupType", types: ["スープ", "みそ汁", "鍋", "その他"] },
-    "ご飯もの": { field: "riceType", types: ["丼もの", "炒飯・ピラフ", "炊き込み・混ぜご飯", "カレー・ハヤシ", "その他"] },
+    "ご飯もの": { field: "riceType", types: ["丼もの", "味付きご飯", "おにぎり", "カレー・ハヤシ", "その他"] },
 };
 // app.js の inferRiceType と同じ判定(保存時に小分類が入っていない既存レシピ用)
 function inferRiceTypeFromTitle(title) {
     const t = title || "";
     if (/丼/.test(t))
         return "丼もの";
-    if (/チャーハン|炒飯|ピラフ|ガーリックライス/.test(t))
-        return "炒飯・ピラフ";
-    if (/炊き込み|混ぜご飯|まぜご飯|五目ご飯|炊込み/.test(t))
-        return "炊き込み・混ぜご飯";
+    if (/おにぎり|おむすび|握り飯/.test(t))
+        return "おにぎり";
+    if (/チャーハン|炒飯|ピラフ|ガーリックライス|混ぜご飯|まぜご飯|混ぜ込み|炊き込み|炊込み|五目ご飯/.test(t))
+        return "味付きご飯";
     if (/カレー|ハヤシ/.test(t))
         return "カレー・ハヤシ";
     return "その他";
@@ -257,7 +257,7 @@ function recipeGenre(r) {
 function recipeSubType(r) {
     const def = PICKER_SUBTYPES[recipeGenre(r)];
     if (def && def.field === "riceType")
-        return r.riceType || inferRiceTypeFromTitle(r.title);
+        return def.types.includes(r.riceType) ? r.riceType : inferRiceTypeFromTitle(r.title);
     return def ? (r[def.field] || "その他") : null;
 }
 // Which of a day's entries get a visible card: the first main / side / soup

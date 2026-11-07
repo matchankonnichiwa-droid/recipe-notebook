@@ -323,7 +323,7 @@ const MEAT_TYPES = ["鶏肉", "豚肉", "牛肉", "ひき肉", "その他"];
 const NOODLE_TYPES = ["うどん", "そば", "ラーメン", "パスタ", "その他"];
 const VEG_TYPES = ["サラダ", "炒め物", "和え物・おひたし", "煮物", "漬け物", "その他"];
 const SOUP_TYPES = ["スープ", "みそ汁", "鍋", "その他"];
-const RICE_TYPES = ["丼もの", "炒飯・ピラフ", "炊き込み・混ぜご飯", "カレー・ハヤシ", "その他"];
+const RICE_TYPES = ["丼もの", "味付きご飯", "おにぎり", "カレー・ハヤシ", "その他"];
 function inferNoodleType(title) {
     const t = title || "";
     if (/うどん/.test(t))
@@ -375,13 +375,17 @@ function inferRiceType(title) {
     const t = title || "";
     if (/丼/.test(t))
         return "丼もの";
-    if (/チャーハン|炒飯|ピラフ|ガーリックライス/.test(t))
-        return "炒飯・ピラフ";
-    if (/炊き込み|混ぜご飯|まぜご飯|五目ご飯|炊込み/.test(t))
-        return "炊き込み・混ぜご飯";
+    if (/おにぎり|おむすび|握り飯/.test(t))
+        return "おにぎり";
+    if (/チャーハン|炒飯|ピラフ|ガーリックライス|混ぜご飯|まぜご飯|混ぜ込み|炊き込み|炊込み|五目ご飯/.test(t))
+        return "味付きご飯";
     if (/カレー|ハヤシ/.test(t))
         return "カレー・ハヤシ";
     return "その他";
+}
+// 保存済みの小分類が今の一覧にない(旧名称・未設定)ときは、タイトルから判定する
+function riceTypeOf(r) {
+    return RICE_TYPES.includes(r && r.riceType) ? r.riceType : inferRiceType(r && r.title);
 }
 function inferDishCategory(title, ingredients) {
     const t = title || "";
@@ -2753,7 +2757,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
             list = list.filter((r) => (r.soupType || "その他") === soupTypeFilter);
         }
         if (categoryFilter === "ご飯もの" && riceTypeFilter) {
-            list = list.filter((r) => (r.riceType || inferRiceType(r.title)) === riceTypeFilter);
+            list = list.filter((r) => riceTypeOf(r) === riceTypeFilter);
         }
         if (applianceFilter) {
             list = list.filter((r) => r.appliance === applianceFilter);
@@ -4151,7 +4155,7 @@ function DraftEditor({ draft, setDraft, onSave, onDiscard, saveError, mode = "cr
         draft.dishCategory === "麺類" && (React.createElement("select", { value: draft.noodleType || "その他", onChange: (e) => updateNoodleType(e.target.value), style: { ...inputStyle, color: COLORS.sage, fontSize: 13 } }, NOODLE_TYPES.map((nt) => (React.createElement("option", { key: nt, value: nt }, nt))))),
         draft.dishCategory === "野菜料理" && (React.createElement("select", { value: draft.vegType || "その他", onChange: (e) => updateVegType(e.target.value), style: { ...inputStyle, color: COLORS.sage, fontSize: 13 } }, VEG_TYPES.map((vt) => (React.createElement("option", { key: vt, value: vt }, vt))))),
         draft.dishCategory === "スープ・鍋" && (React.createElement("select", { value: draft.soupType || "その他", onChange: (e) => updateSoupType(e.target.value), style: { ...inputStyle, color: COLORS.sage, fontSize: 13 } }, SOUP_TYPES.map((st) => (React.createElement("option", { key: st, value: st }, st))))),
-        draft.dishCategory === "ご飯もの" && (React.createElement("select", { value: draft.riceType || "その他", onChange: (e) => updateRiceType(e.target.value), style: { ...inputStyle, color: COLORS.sage, fontSize: 13 } }, RICE_TYPES.map((rt) => (React.createElement("option", { key: rt, value: rt }, rt))))),
+        draft.dishCategory === "ご飯もの" && (React.createElement("select", { value: riceTypeOf(draft), onChange: (e) => updateRiceType(e.target.value), style: { ...inputStyle, color: COLORS.sage, fontSize: 13 } }, RICE_TYPES.map((rt) => (React.createElement("option", { key: rt, value: rt }, rt))))),
         React.createElement("label", { style: fieldLabelStyle }, "\u4F7F\u3063\u305F\u8ABF\u7406\u5BB6\u96FB(\u4EFB\u610F)"),
         React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 } },
             React.createElement("button", { onClick: () => update({ appliance: null }), style: {
