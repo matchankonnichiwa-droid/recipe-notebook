@@ -305,13 +305,14 @@ function Spine() {
             borderRadius: "10px 0 0 10px",
         } }));
 }
-const DISH_CATEGORIES = ["肉料理", "魚介料理", "野菜料理", "ご飯もの", "麺類", "スープ・鍋", "デザート", "パン", "その他"];
+const DISH_CATEGORIES = ["肉料理", "魚介料理", "野菜料理", "ご飯もの", "麺類", "スープ・鍋", "デザート", "パン", "お弁当", "その他"];
 const CATEGORY_ICONS = {
     肉料理: "🥩",
     パン: "🍞",
     魚介料理: "🐟",
     野菜料理: "🥬",
     ご飯もの: "🍚",
+    お弁当: "🍱",
     麺類: "🍜",
     "スープ・鍋": "🍲",
     デザート: "🍰",
@@ -322,6 +323,7 @@ const MEAT_TYPES = ["鶏肉", "豚肉", "牛肉", "ひき肉", "その他"];
 const NOODLE_TYPES = ["うどん", "そば", "ラーメン", "パスタ", "その他"];
 const VEG_TYPES = ["サラダ", "炒め物", "和え物・おひたし", "煮物", "漬け物", "その他"];
 const SOUP_TYPES = ["スープ", "みそ汁", "鍋", "その他"];
+const RICE_TYPES = ["丼もの", "炒飯・ピラフ", "炊き込み・混ぜご飯", "カレー・ハヤシ", "その他"];
 function inferNoodleType(title) {
     const t = title || "";
     if (/うどん/.test(t))
@@ -369,16 +371,28 @@ function inferSoupType(title) {
         return "スープ";
     return "その他";
 }
+function inferRiceType(title) {
+    const t = title || "";
+    if (/丼/.test(t))
+        return "丼もの";
+    if (/チャーハン|炒飯|ピラフ|ガーリックライス/.test(t))
+        return "炒飯・ピラフ";
+    if (/炊き込み|混ぜご飯|まぜご飯|五目ご飯|炊込み/.test(t))
+        return "炊き込み・混ぜご飯";
+    if (/カレー|ハヤシ/.test(t))
+        return "カレー・ハヤシ";
+    return "その他";
+}
 function inferDishCategory(title, ingredients) {
     const t = title || "";
-    const base = { meatType: null, noodleType: null, vegType: null, soupType: null };
+    const base = { meatType: null, noodleType: null, vegType: null, soupType: null, riceType: null };
     if (/麺|パスタ|うどん|そば|ラーメン|焼きそば/.test(t)) {
         return { ...base, dishCategory: "麺類", noodleType: inferNoodleType(t) };
     }
     if (/パン|食パン|ベーグル|フォカッチャ|バゲット|ロール(?!キャベツ)/.test(t))
         return { ...base, dishCategory: "パン" };
     if (/ご飯|ごはん|丼|オムライス|チャーハン|カレー|寿司|リゾット|おにぎり/.test(t))
-        return { ...base, dishCategory: "ご飯もの" };
+        return { ...base, dishCategory: "ご飯もの", riceType: inferRiceType(t) };
     if (/スープ|汁|鍋|シチュー/.test(t))
         return { ...base, dishCategory: "スープ・鍋", soupType: inferSoupType(t) };
     if (/ケーキ|クッキー|スイーツ|デザート|プリン|アイス|タルト|マフィン/.test(t))
@@ -429,6 +443,7 @@ function buildRecipeIndexEntry(recipe) {
         noodleType: recipe.noodleType || null,
         vegType: recipe.vegType || null,
         soupType: recipe.soupType || null,
+        riceType: recipe.riceType || null,
         appliance: recipe.appliance || null,
         sourceType: recipe.sourceType || null,
         favorite: !!recipe.favorite,
@@ -507,10 +522,14 @@ function resolveClassification(structured, classifyText, ingredients, applianceT
         soupType = titleSoup !== "その他" ? titleSoup
             : (usedClaude && SOUP_TYPES.includes(structured?.soupType) ? structured.soupType : titleSoup);
     }
+    let riceType = null;
+    if (dishCategory === "ご飯もの") {
+        riceType = inferRiceType(title);
+    }
     const appliance = usedClaude
         ? (APPLIANCES.includes(structured?.appliance) ? structured.appliance : null)
         : inferAppliance(applianceText);
-    return { dishCategory, meatType, noodleType, vegType, soupType, appliance };
+    return { dishCategory, meatType, noodleType, vegType, soupType, riceType, appliance };
 }
 const CIRCLED_DIGITS = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳";
 const BULLET_CHARS = ["●", "・", "-", "*", "■", "◆", "〇", "○", "◎", "▽", "▼", "▲", "▶", "□", "☆"];
@@ -948,6 +967,7 @@ function parseCaptionHeuristic(rawText) {
         noodleType: inferred.noodleType,
         vegType: inferred.vegType,
                         soupType: inferred.soupType,
+ riceType: inferred.riceType,
     };
 }
 // Computes Otsu's threshold: the gray-level that best splits a bimodal
@@ -2046,6 +2066,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
     const [noodleTypeFilter, setNoodleTypeFilter] = useState(null);
     const [vegTypeFilter, setVegTypeFilter] = useState(null);
     const [soupTypeFilter, setSoupTypeFilter] = useState(null);
+    const [riceTypeFilter, setRiceTypeFilter] = useState(null);
     const [applianceFilter, setApplianceFilter] = useState(null);
     const [inputUrl, setInputUrl] = useState("");
     const [inputText, setInputText] = useState("");
@@ -2481,6 +2502,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
                             noodleType: inferred.noodleType,
                             vegType: inferred.vegType,
                         soupType: inferred.soupType,
+ riceType: inferred.riceType,
                             appliance: inferred.appliance,
                         };
                     });
@@ -2590,6 +2612,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
                     noodleType: inferred.noodleType,
                     vegType: inferred.vegType,
                         soupType: inferred.soupType,
+ riceType: inferred.riceType,
                     appliance: inferred.appliance,
                     sourceUrl: url,
                     sourceType: detectSource(url),
@@ -2729,6 +2752,9 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
         if (categoryFilter === "スープ・鍋" && soupTypeFilter) {
             list = list.filter((r) => (r.soupType || "その他") === soupTypeFilter);
         }
+        if (categoryFilter === "ご飯もの" && riceTypeFilter) {
+            list = list.filter((r) => (r.riceType || inferRiceType(r.title)) === riceTypeFilter);
+        }
         if (applianceFilter) {
             list = list.filter((r) => r.appliance === applianceFilter);
         }
@@ -2749,7 +2775,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
                 .toLowerCase();
             return hay.includes(q);
         });
-    }, [recipes, query, categoryFilter, meatTypeFilter, noodleTypeFilter, vegTypeFilter, soupTypeFilter, applianceFilter, favoriteOnly]);
+    }, [recipes, query, categoryFilter, meatTypeFilter, noodleTypeFilter, vegTypeFilter, soupTypeFilter, riceTypeFilter, applianceFilter, favoriteOnly]);
     const availableCategories = categoryOrder || DISH_CATEGORIES;
     const availableAppliances = applianceOrder || APPLIANCES;
     // `selected` is the lightweight recipe-index summary (title, photo,
@@ -2818,7 +2844,7 @@ function RecipeNotebook({ apiKey, jinaApiKey, categoryOrder, applianceOrder, ini
                 }, confirmDelete: confirmDelete, onArmDelete: () => setConfirmDelete(true), onConfirmDelete: () => selected && handleDelete(selected.id), onCancelDelete: () => setConfirmDelete(false) }),
             !loaded && (React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 } },
                 Array.from({ length: 6 }).map((_, i) => React.createElement(SkeletonGridCard, { key: i })))),
-            loaded && view === "list" && (React.createElement(ListView, { recipes: filtered, total: recipes.length, query: query, setQuery: setQuery, categoryFilter: categoryFilter, setCategoryFilter: setCategoryFilter, meatTypeFilter: meatTypeFilter, setMeatTypeFilter: setMeatTypeFilter, noodleTypeFilter: noodleTypeFilter, setNoodleTypeFilter: setNoodleTypeFilter, vegTypeFilter: vegTypeFilter, setVegTypeFilter: setVegTypeFilter, soupTypeFilter: soupTypeFilter, setSoupTypeFilter: setSoupTypeFilter, availableCategories: availableCategories, applianceFilter: applianceFilter, setApplianceFilter: setApplianceFilter, availableAppliances: availableAppliances, favoriteOnly: favoriteOnly, setFavoriteOnly: setFavoriteOnly, viewMode: viewMode, setViewMode: changeViewMode, onAdd: (mode = "url") => { setAddMode(mode); setView("add"); }, onSelect: (id) => { setSelectedId(id); setView("detail"); setConfirmDelete(false); }, onDeleteRecipe: handleDelete, notice: urlImportNotice, onDismissNotice: () => setUrlImportNotice("") })),
+            loaded && view === "list" && (React.createElement(ListView, { recipes: filtered, total: recipes.length, query: query, setQuery: setQuery, categoryFilter: categoryFilter, setCategoryFilter: setCategoryFilter, meatTypeFilter: meatTypeFilter, setMeatTypeFilter: setMeatTypeFilter, noodleTypeFilter: noodleTypeFilter, setNoodleTypeFilter: setNoodleTypeFilter, vegTypeFilter: vegTypeFilter, setVegTypeFilter: setVegTypeFilter, soupTypeFilter: soupTypeFilter, setSoupTypeFilter: setSoupTypeFilter, riceTypeFilter: riceTypeFilter, setRiceTypeFilter: setRiceTypeFilter, availableCategories: availableCategories, applianceFilter: applianceFilter, setApplianceFilter: setApplianceFilter, availableAppliances: availableAppliances, favoriteOnly: favoriteOnly, setFavoriteOnly: setFavoriteOnly, viewMode: viewMode, setViewMode: changeViewMode, onAdd: (mode = "url") => { setAddMode(mode); setView("add"); }, onSelect: (id) => { setSelectedId(id); setView("detail"); setConfirmDelete(false); }, onDeleteRecipe: handleDelete, notice: urlImportNotice, onDismissNotice: () => setUrlImportNotice("") })),
             loaded && view === "calendar" && (React.createElement(LazyCalendarView, { recipes: recipes, mealPlan: mealPlan, onAddEntry: addMealPlanEntry, onRemoveEntry: removeMealPlanEntry, onSetDayEntries: setMealPlanEntries, onBack: () => setView("list"), onSelectRecipe: (id) => { setSelectedId(id); setDetailOrigin("calendar"); setView("detail"); setConfirmDelete(false); }, initialMode: calendarMode, onModeChange: setCalendarMode, categoryOrder: categoryOrder })),
             loaded && view === "add" && (React.createElement(AddView, { inputUrl: inputUrl, setInputUrl: setInputUrl, inputText: inputText, setInputText: setInputText, extractError: extractError, onExtract: handleExtract, extracting: extracting, draft: draft, setDraft: setDraft, onSave: handleSaveDraft, onDiscard: () => setDraft(null), saveError: saveError, ocrRunning: ocrRunning, ocrProgress: ocrProgress, ocrError: ocrError, onScreenshots: handleScreenshots, urlImporting: urlImporting, urlImportError: urlImportError, onUrlImport: handleUrlImport, apiKey: apiKey, addMode: addMode, categoryOrder: categoryOrder, applianceOrder: applianceOrder })),
             loaded && view === "detail" && selected && (React.createElement(DetailView, { recipe: full, loadingFull: fullRecipeLoading, onAddToShoppingList: addToShoppingList })),
@@ -2930,7 +2956,7 @@ function groupByDishCategory(recipes) {
         return { cat, subGroups: null, items };
     });
 }
-function ListView({ recipes, total, query, setQuery, categoryFilter, setCategoryFilter, meatTypeFilter, setMeatTypeFilter, noodleTypeFilter, setNoodleTypeFilter, vegTypeFilter, setVegTypeFilter, soupTypeFilter, setSoupTypeFilter, availableCategories, applianceFilter, setApplianceFilter, availableAppliances, favoriteOnly, setFavoriteOnly, viewMode, setViewMode, onAdd, onSelect, onDeleteRecipe, notice, onDismissNotice, }) {
+function ListView({ recipes, total, query, setQuery, categoryFilter, setCategoryFilter, meatTypeFilter, setMeatTypeFilter, noodleTypeFilter, setNoodleTypeFilter, vegTypeFilter, setVegTypeFilter, soupTypeFilter, setSoupTypeFilter, riceTypeFilter, setRiceTypeFilter, availableCategories, applianceFilter, setApplianceFilter, availableAppliances, favoriteOnly, setFavoriteOnly, viewMode, setViewMode, onAdd, onSelect, onDeleteRecipe, notice, onDismissNotice, }) {
     useEffect(() => {
         if (!notice)
             return;
@@ -3212,6 +3238,37 @@ function ListView({ recipes, total, query, setQuery, categoryFilter, setCategory
                     fontWeight: 700,
                     whiteSpace: "nowrap",
                 } }, st))))),
+        categoryFilter === "ご飯もの" && (React.createElement("div", { style: {
+                display: "flex",
+                gap: 8,
+                overflowX: "auto",
+                paddingBottom: 4,
+                marginBottom: 16,
+                marginTop: -8,
+                WebkitOverflowScrolling: "touch",
+            } },
+            React.createElement("button", { onClick: () => setRiceTypeFilter(null), style: {
+                    flexShrink: 0,
+                    fontSize: 11.5,
+                    padding: "6px 13px",
+                    borderRadius: 999,
+                    border: `1px solid ${!riceTypeFilter ? COLORS.sage : COLORS.line}`,
+                    background: !riceTypeFilter ? COLORS.sageSoft : "transparent",
+                    color: !riceTypeFilter ? COLORS.sage : COLORS.inkSoft,
+                    fontWeight: 700,
+                    whiteSpace: "nowrap",
+                } }, "すべてのご飯もの"),
+            RICE_TYPES.map((rt) => (React.createElement("button", { key: rt, onClick: () => setRiceTypeFilter(riceTypeFilter === rt ? null : rt), style: {
+                    flexShrink: 0,
+                    fontSize: 11.5,
+                    padding: "6px 13px",
+                    borderRadius: 999,
+                    border: `1px solid ${riceTypeFilter === rt ? COLORS.sage : COLORS.line}`,
+                    background: riceTypeFilter === rt ? COLORS.sageSoft : "transparent",
+                    color: riceTypeFilter === rt ? COLORS.sage : COLORS.inkSoft,
+                    fontWeight: 700,
+                    whiteSpace: "nowrap",
+                } }, rt))))),
         total === 0 ? (React.createElement(EmptyState, { onAdd: onAdd })) : recipes.length === 0 ? (React.createElement("p", { style: { color: COLORS.inkSoft, fontSize: 14, padding: "20px 4px" } }, query.trim() && categoryFilter
             ? `「${categoryFilter}」の中に「${query}」に一致するレシピが見つかりませんでした。`
             : query.trim()
@@ -3635,7 +3692,7 @@ function AddView({ inputUrl, setInputUrl, inputText, setInputText, extractError,
     const cameraPickerRef = useRef(null);
     useEffect(() => {
         if (addMode === "manual" && !draft) {
-            setDraft({ title: "", servings: "", ingredients: [], steps: [], tags: [], memo: "", dishCategory: "その他", meatType: null, noodleType: null, vegType: null, soupType: null, appliance: null, sourceUrl: "", sourceType: "other", imageUrl: "", imageUrl2: "", imageUrl3: "" });
+            setDraft({ title: "", servings: "", ingredients: [], steps: [], tags: [], memo: "", dishCategory: "その他", meatType: null, noodleType: null, vegType: null, soupType: null, riceType: null, appliance: null, sourceUrl: "", sourceType: "other", imageUrl: "", imageUrl2: "", imageUrl3: "" });
         } else if (addMode === "image") {
             setTimeout(() => imagePickerRef.current && imagePickerRef.current.click(), 80);
         } else if (addMode === "camera") {
@@ -3875,7 +3932,7 @@ function DraftEditor({ draft, setDraft, onSave, onDiscard, saveError, mode = "cr
         }
         else {
             const inferred = inferDishCategory(value, draft.ingredients);
-            update({ title: value, dishCategory: inferred.dishCategory, meatType: inferred.meatType, noodleType: inferred.noodleType, vegType: inferred.vegType, soupType: inferred.soupType });
+            update({ title: value, dishCategory: inferred.dishCategory, meatType: inferred.meatType, noodleType: inferred.noodleType, vegType: inferred.vegType, soupType: inferred.soupType, riceType: inferred.riceType });
         }
     };
     const updateDishCategory = (value) => {
@@ -3886,6 +3943,7 @@ function DraftEditor({ draft, setDraft, onSave, onDiscard, saveError, mode = "cr
             noodleType: value === "麺類" ? draft.noodleType || "その他" : null,
             vegType: value === "野菜料理" ? draft.vegType || "その他" : null,
             soupType: value === "スープ・鍋" ? draft.soupType || "その他" : null,
+            riceType: value === "ご飯もの" ? draft.riceType || "その他" : null,
         });
     };
     const updateMeatType = (value) => {
@@ -3903,6 +3961,10 @@ function DraftEditor({ draft, setDraft, onSave, onDiscard, saveError, mode = "cr
     const updateSoupType = (value) => {
         setCategoryManual(true);
         update({ soupType: value });
+    };
+    const updateRiceType = (value) => {
+        setCategoryManual(true);
+        update({ riceType: value });
     };
     // Changing the servings count rescales every ingredient amount from the
     // current base, then that new count becomes the base for next time.
@@ -4084,11 +4146,12 @@ function DraftEditor({ draft, setDraft, onSave, onDiscard, saveError, mode = "cr
             "\u73FE\u5728\u306E\u8A2D\u5B9A: ",
             draft.servings)),
         React.createElement("label", { style: fieldLabelStyle }, "\u6599\u7406\u306E\u30B8\u30E3\u30F3\u30EB"),
-        React.createElement("select", { value: draft.dishCategory || "その他", onChange: (e) => updateDishCategory(e.target.value), style: { ...inputStyle, color: COLORS.ink, marginBottom: (draft.dishCategory === "肉料理" || draft.dishCategory === "麺類" || draft.dishCategory === "野菜料理") ? 8 : 14 } }, (categoryOrder || DISH_CATEGORIES).map((cat) => (React.createElement("option", { key: cat, value: cat }, cat)))),
+        React.createElement("select", { value: draft.dishCategory || "その他", onChange: (e) => updateDishCategory(e.target.value), style: { ...inputStyle, color: COLORS.ink, marginBottom: (draft.dishCategory === "肉料理" || draft.dishCategory === "麺類" || draft.dishCategory === "野菜料理" || draft.dishCategory === "スープ・鍋" || draft.dishCategory === "ご飯もの") ? 8 : 14 } }, (categoryOrder || DISH_CATEGORIES).map((cat) => (React.createElement("option", { key: cat, value: cat }, cat)))),
         draft.dishCategory === "肉料理" && (React.createElement("select", { value: draft.meatType || "その他", onChange: (e) => updateMeatType(e.target.value), style: { ...inputStyle, color: COLORS.sage, fontSize: 13 } }, MEAT_TYPES.map((mt) => (React.createElement("option", { key: mt, value: mt }, mt))))),
         draft.dishCategory === "麺類" && (React.createElement("select", { value: draft.noodleType || "その他", onChange: (e) => updateNoodleType(e.target.value), style: { ...inputStyle, color: COLORS.sage, fontSize: 13 } }, NOODLE_TYPES.map((nt) => (React.createElement("option", { key: nt, value: nt }, nt))))),
         draft.dishCategory === "野菜料理" && (React.createElement("select", { value: draft.vegType || "その他", onChange: (e) => updateVegType(e.target.value), style: { ...inputStyle, color: COLORS.sage, fontSize: 13 } }, VEG_TYPES.map((vt) => (React.createElement("option", { key: vt, value: vt }, vt))))),
         draft.dishCategory === "スープ・鍋" && (React.createElement("select", { value: draft.soupType || "その他", onChange: (e) => updateSoupType(e.target.value), style: { ...inputStyle, color: COLORS.sage, fontSize: 13 } }, SOUP_TYPES.map((st) => (React.createElement("option", { key: st, value: st }, st))))),
+        draft.dishCategory === "ご飯もの" && (React.createElement("select", { value: draft.riceType || "その他", onChange: (e) => updateRiceType(e.target.value), style: { ...inputStyle, color: COLORS.sage, fontSize: 13 } }, RICE_TYPES.map((rt) => (React.createElement("option", { key: rt, value: rt }, rt))))),
         React.createElement("label", { style: fieldLabelStyle }, "\u4F7F\u3063\u305F\u8ABF\u7406\u5BB6\u96FB(\u4EFB\u610F)"),
         React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 } },
             React.createElement("button", { onClick: () => update({ appliance: null }), style: {
@@ -4297,7 +4360,7 @@ function DetailView({ recipe, loadingFull, onAddToShoppingList }) {
                 } }))),
         React.createElement("div", { style: { marginBottom: 4 } },
             React.createElement("h2", { style: { fontFamily: "'Noto Sans JP', sans-serif", fontSize: 25, fontWeight: 800, margin: 0, lineHeight: 1.35, letterSpacing: "-0.025em" } }, recipe.title)),
-        (recipe.dishCategory || recipe.meatType || recipe.noodleType || recipe.vegType || recipe.soupType || recipe.appliance || (recipe.sourceType && recipe.sourceType !== "other")) && (React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 } },
+        (recipe.dishCategory || recipe.meatType || recipe.noodleType || recipe.vegType || recipe.soupType || recipe.riceType || recipe.appliance || (recipe.sourceType && recipe.sourceType !== "other")) && (React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 } },
             recipe.sourceType && recipe.sourceType !== "other" && React.createElement("span", { style: {
                     fontSize: 11.5, fontWeight: 700, color: COLORS.sage, background: COLORS.sageSoft,
                     borderRadius: 999, padding: "4px 11px",
@@ -4322,6 +4385,10 @@ function DetailView({ recipe, loadingFull, onAddToShoppingList }) {
                     fontSize: 11.5, fontWeight: 700, color: COLORS.sage, background: COLORS.sageSoft,
                     borderRadius: 999, padding: "4px 11px",
                 } }, recipe.soupType),
+            recipe.riceType && React.createElement("span", { style: {
+                    fontSize: 11.5, fontWeight: 700, color: COLORS.sage, background: COLORS.sageSoft,
+                    borderRadius: 999, padding: "4px 11px",
+                } }, recipe.riceType),
             recipe.appliance && React.createElement("span", { style: {
                     fontSize: 11.5, fontWeight: 700, color: COLORS.mustard, background: "#F5EDE1",
                     borderRadius: 999, padding: "4px 11px",

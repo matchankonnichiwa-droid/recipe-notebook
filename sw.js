@@ -35,7 +35,7 @@
 // 動的import(prints.js)のような「初回に取得されたタイミングによっては、
 // 直近まで更新され続けていたファイル」とは相性が悪かったため。
 // バージョンを上げて確実に空のキャッシュからやり直す。
-const CACHE_VERSION = "v5";
+const CACHE_VERSION = "v6";
 const CACHE_NAME = `recipe-app-${CACHE_VERSION}`;
 
 const APP_FILES = [

@@ -227,13 +227,27 @@ function DateSwapSheet({ startDateStr, mealPlan, recipesById, weekdayNames, onCl
 // VEG_TYPES / SOUP_TYPES). This file is lazy-loaded, so it keeps its own copy
 // rather than importing from app.js (which would be circular) — if a genre or
 // sub-type is added over there, add it here too.
-const PICKER_DEFAULT_GENRES = ["肉料理", "魚介料理", "野菜料理", "ご飯もの", "麺類", "スープ・鍋", "デザート", "パン", "その他"];
+const PICKER_DEFAULT_GENRES = ["肉料理", "魚介料理", "野菜料理", "ご飯もの", "麺類", "スープ・鍋", "デザート", "パン", "お弁当", "その他"];
 const PICKER_SUBTYPES = {
     "肉料理": { field: "meatType", types: ["鶏肉", "豚肉", "牛肉", "ひき肉", "その他"] },
     "麺類": { field: "noodleType", types: ["うどん", "そば", "ラーメン", "パスタ", "その他"] },
     "野菜料理": { field: "vegType", types: ["サラダ", "炒め物", "和え物・おひたし", "煮物", "漬け物", "その他"] },
     "スープ・鍋": { field: "soupType", types: ["スープ", "みそ汁", "鍋", "その他"] },
+    "ご飯もの": { field: "riceType", types: ["丼もの", "炒飯・ピラフ", "炊き込み・混ぜご飯", "カレー・ハヤシ", "その他"] },
 };
+// app.js の inferRiceType と同じ判定(保存時に小分類が入っていない既存レシピ用)
+function inferRiceTypeFromTitle(title) {
+    const t = title || "";
+    if (/丼/.test(t))
+        return "丼もの";
+    if (/チャーハン|炒飯|ピラフ|ガーリックライス/.test(t))
+        return "炒飯・ピラフ";
+    if (/炊き込み|混ぜご飯|まぜご飯|五目ご飯|炊込み/.test(t))
+        return "炊き込み・混ぜご飯";
+    if (/カレー|ハヤシ/.test(t))
+        return "カレー・ハヤシ";
+    return "その他";
+}
 function recipeGenre(r) {
     return r.dishCategory || "その他";
 }
@@ -242,6 +256,8 @@ function recipeGenre(r) {
 // fall back to "その他", same as the main list does.
 function recipeSubType(r) {
     const def = PICKER_SUBTYPES[recipeGenre(r)];
+    if (def && def.field === "riceType")
+        return r.riceType || inferRiceTypeFromTitle(r.title);
     return def ? (r[def.field] || "その他") : null;
 }
 // Which of a day's entries get a visible card: the first main / side / soup
@@ -533,8 +549,15 @@ export function CalendarView({ recipes, mealPlan, onAddEntry, onRemoveEntry, onS
         if (candidates.length === 0)
             return;
         const next = candidates[Math.floor(Math.random() * candidates.length)];
-        onRemoveEntry(dateStr, oldRecipeId);
-        onAddEntry(dateStr, next);
+        // 削除+末尾追加だと並びが入れ替わり、同じカテゴリの別の品も変わったように
+        // 見えるので、押した品と同じ位置でその場で差し替える。
+        const nextEntry = {
+            recipeId: next.id,
+            title: next.title,
+            imageUrl: next.imageUrl || next.imageUrl2 || next.imageUrl3 || "",
+            dishCategory: next.dishCategory || null
+        };
+        onSetDayEntries(dateStr, entries.map((e) => (e.recipeId === oldRecipeId ? nextEntry : e)));
     }
     function deleteDay(dateStr) {
         const entries = Array.isArray(mealPlan[dateStr]) ? mealPlan[dateStr] : [];
